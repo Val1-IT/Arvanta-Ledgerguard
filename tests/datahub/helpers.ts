@@ -11,7 +11,10 @@ export const ARTIFACTS = {
   bootstrapRun2: path.join(REPO_ROOT, 'examples', 'datahub', 'bootstrap-report.json'),
   mcpProof: path.join(REPO_ROOT, 'examples', 'mcp', 'proof-report.json'),
   mcpActivityLog: path.join(REPO_ROOT, 'examples', 'mcp', 'activity-log.jsonl'),
-  writeback: path.join(REPO_ROOT, 'examples', 'mcp', 'writeback-report.json')
+  writeback: path.join(REPO_ROOT, 'examples', 'mcp', 'writeback-report.json'),
+  mutationTools: path.join(REPO_ROOT, 'examples', 'mcp', 'mutation-tools.json'),
+  mutationProof: path.join(REPO_ROOT, 'examples', 'mcp', 'mutation-proof-report.json'),
+  mutationActivityLog: path.join(REPO_ROOT, 'examples', 'mcp', 'mutation-activity-log.jsonl')
 };
 
 /** Run one of the project's Python entry points through the venv launcher. */

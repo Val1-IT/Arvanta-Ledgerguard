@@ -1,0 +1,53 @@
+{
+  "target_urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)",
+  "mcp_server_tools": [
+    "add_owners",
+    "add_structured_properties",
+    "add_tags",
+    "add_terms",
+    "get_dataset_queries",
+    "get_entities",
+    "get_lineage",
+    "get_lineage_paths_between",
+    "get_me",
+    "list_schema_fields",
+    "remove_domains",
+    "remove_owners",
+    "remove_structured_properties",
+    "remove_tags",
+    "remove_terms",
+    "save_document",
+    "search",
+    "set_domains",
+    "update_description"
+  ],
+  "required_tools_present": true,
+  "missing_required_tools": [],
+  "baseline_tags": [
+    "urn:li:tag:ERP",
+    "urn:li:tag:Finance Critical",
+    "urn:li:tag:Inventory Critical"
+  ],
+  "baseline_description": "Current stock position and its monetary value per product, aggregated from inventory_movements base quantities.",
+  "tag_added_via_mcp": true,
+  "note_updated_via_mcp": true,
+  "tag_verified_after_write": true,
+  "note_verified_after_write": true,
+  "tag_removed_via_mcp": true,
+  "description_restored_via_mcp": true,
+  "final_tags": [
+    "urn:li:tag:ERP",
+    "urn:li:tag:Finance Critical",
+    "urn:li:tag:Inventory Critical"
+  ],
+  "final_description": "Current stock position and its monetary value per product, aggregated from inventory_movements base quantities.",
+  "final_clean": true,
+  "write_path": "mcp",
+  "verdict": "OK",
+  "activity_log": "examples/mcp/mutation-activity-log.jsonl",
+  "activity_entries": 7,
+  "notes": [
+    "Add -> verify -> restore -> verify completed entirely through MCP mutation tools (add_tags, update_description, remove_tags). No SDK fallback was invoked."
+  ],
+  "passed": true
+}

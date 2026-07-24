@@ -1,0 +1,30 @@
+{
+  "mcp_server_tools": [
+    "add_owners",
+    "add_structured_properties",
+    "add_tags",
+    "add_terms",
+    "get_dataset_queries",
+    "get_entities",
+    "get_lineage",
+    "get_lineage_paths_between",
+    "get_me",
+    "list_schema_fields",
+    "remove_domains",
+    "remove_owners",
+    "remove_structured_properties",
+    "remove_tags",
+    "remove_terms",
+    "save_document",
+    "search",
+    "set_domains",
+    "update_description"
+  ],
+  "required_mutation_tools": [
+    "add_tags",
+    "remove_tags",
+    "update_description"
+  ],
+  "missing_required_tools": [],
+  "required_tools_present": true
+}

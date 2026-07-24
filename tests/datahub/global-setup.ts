@@ -14,6 +14,11 @@ export async function setup(): Promise<void> {
   await runPython(['-m', 'src.datahub.bootstrap', '--quiet', '--report', ARTIFACTS.bootstrapRun1]);
   await runPython(['-m', 'src.datahub.bootstrap', '--quiet', '--report', ARTIFACTS.bootstrapRun2]);
   await runPython(['-m', 'src.datahub.mcp.proof']);
+  // Runs before the write-back proof: the mutation proof requires (and leaves
+  // behind) a pristine baseline, restoring it itself as its own step D/E. The
+  // write-back proof's tag + note are meant to persist in GMS until its own
+  // teardown restore, so it must run after this, not before.
+  await runPython(['-m', 'src.datahub.mcp.mutation_proof']);
   await runPython(['-m', 'src.datahub.mcp.writeback']);
 }
 

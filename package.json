@@ -33,6 +33,7 @@
     "datahub:mcp-proof": "node scripts/py.mjs -m src.datahub.mcp.proof",
     "datahub:writeback-proof": "node scripts/py.mjs -m src.datahub.mcp.writeback",
     "datahub:metadata-reset": "node scripts/py.mjs -m src.datahub.mcp.writeback --restore",
+    "datahub:mcp-mutation-proof": "node scripts/py.mjs -m src.datahub.mcp.mutation_proof",
     "test:datahub": "vitest run --config vitest.datahub.config.ts"
   },
   "dependencies": {
