@@ -1,0 +1,74 @@
+{
+  "gms_reachable": true,
+  "mcp_server": "mcp-server-datahub (self-hosted, stdio)",
+  "available_tools": [
+    "get_dataset_queries",
+    "get_entities",
+    "get_lineage",
+    "get_lineage_paths_between",
+    "get_me",
+    "list_schema_fields",
+    "search"
+  ],
+  "steps": [
+    {
+      "number": 1,
+      "name": "Search dataset product_units",
+      "tool": "search",
+      "passed": true,
+      "detail": "Dataset located in DataHub search results",
+      "evidence": "{\"start\":0,\"count\":10,\"total\":10,\"searchResults\":[{\"entity\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.product_units,PROD)\",\"properties\":{\"name\":\"ledgerguard.public.product_units\"}}},{\"entity\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.products,PROD)\",\"properties\":{\"name\":\"ledgerguard.public.products\"}}},{\"entity\":{\"urn\":\"urn:li:glossaryTer\u2026"
+    },
+    {
+      "number": 2,
+      "name": "Read dataset schema",
+      "tool": "get_entities",
+      "passed": true,
+      "detail": "Schema returned with the demo columns",
+      "evidence": "[{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.product_units,PROD)\",\"name\":\"ledgerguard.public.product_units\",\"platform\":{\"urn\":\"urn:li:dataPlatform:postgres\",\"name\":\"postgres\"},\"editableProperties\":{\"description\":\"Alternative selling units per product and the factor that converts them to the base unit. THE ROOT-CAUSE ASSET for the LedgerGuard demo incident: a single wrong conversion_factor (1 CARTON = 10 instead of 12 PCS) propagates into stock quantities, inventory value, journal postings, and gross margin.\"},\"properties\":{\"name\":\"ledgerguard.public.product_units\",\"customProperties\":[{\"key\":\"demo_row_count\",\"value\":\"2\"},{\"key\":\"erp_module\",\"value\":\"inventory\"}]},\"\u2026"
+    },
+    {
+      "number": 3,
+      "name": "Find field conversion_factor",
+      "tool": "list_schema_fields",
+      "passed": true,
+      "detail": "Field conversion_factor found on product_units",
+      "evidence": "{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.product_units,PROD)\",\"fields\":[{\"fieldPath\":\"conversion_factor\",\"nativeDataType\":\"numeric(12,4)\",\"description\":\"Number of base units in one of this unit. Correct value for CARTON is 12. Must always be greater than zero; every downst\",\"nullable\":false},{\"fieldPath\":\"id\",\"nativeDataType\":\"text\",\"description\":\"Primary key.\",\"null\u2026"
+    },
+    {
+      "number": 4,
+      "name": "Read dataset owner",
+      "tool": "get_entities",
+      "passed": true,
+      "detail": "Owner urn:li:corpGroup:inventory-operations",
+      "evidence": "urn:li:corpGroup:inventory-operations"
+    },
+    {
+      "number": 5,
+      "name": "Read tags and glossary terms",
+      "tool": "get_entities",
+      "passed": true,
+      "detail": "4 tags, 2 glossary terms",
+      "evidence": "{\"tags\": [\"urn:li:tag:ERP\", \"urn:li:tag:Finance\", \"urn:li:tag:Inventory\", \"urn:li:tag:Requires\"], \"terms\": [\"urn:li:glossaryTerm:FinanciallyTrustedDataset\", \"urn:li:glossaryTerm:UnitConversion\"]}"
+    },
+    {
+      "number": 6,
+      "name": "Traverse downstream lineage product_units -> gross_margin_report",
+      "tool": "get_lineage",
+      "passed": true,
+      "detail": "Reached 4 downstream assets: inventory_movements, inventory_valuation, journal_entries, gross_margin_report",
+      "evidence": "{\"downstreams\":{\"total\":4,\"facets\":[{\"field\":\"degree\",\"displayName\":\"Degree of Dependencies\",\"aggregations\":[{\"value\":\"1\",\"count\":0},{\"value\":\"2\",\"count\":0},{\"value\":\"3+\",\"count\":0}]},{\"field\":\"_entityType\",\"displayName\":\"Type\",\"aggregations\":[{\"value\":\"DATASET\",\"count\":4}]},{\"field\":\"typeNames\",\"displayName\":\"Sub Type\",\"aggregations\":[{\"value\":\"Table\",\"count\":4}]},{\"field\":\"platform\",\"displayName\":\"Platform\",\"aggregations\":[{\"value\":\"urn:li:dataPlatform:postgres\",\"count\":4,\"entity\":{\"urn\":\"urn:li:dataPlatform:postgres\"}}]},{\"field\":\"tags\",\"displayName\":\"Tagged With\",\"aggregations\":[{\"value\":\"urn:li:tag:ERP\",\"count\":4,\"entity\":{\"urn\":\"urn:li:tag:ERP\"}},{\"value\":\"urn:li:tag:Finance Critical\",\u2026"
+    },
+    {
+      "number": 7,
+      "name": "Real MCP activity log",
+      "tool": "-",
+      "passed": true,
+      "detail": "5 MCP tool calls logged with tool name, timestamp, input and result to examples/mcp/activity-log.jsonl",
+      "evidence": "{\"seq\": 1, \"timestamp\": \"2026-07-24T02:16:26.831758+00:00\", \"tool\": \"search\", \"input\": \"{\\\"query\\\": \\\"product_units\\\", \\\"num_results\\\": 10}\", \"result\": \"{\\\"start\\\":0,\\\"count\\\":10,\\\"total\\\":10,\\\"searchResults\\\":[{\\\"entity\\\":{\\\"urn\\\":\\\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.product_units,PROD)\\\",\\\"properties\\\":{\\\"name\\\":\\\"ledgerguard.public.product_units\\\"}}},{\\\"entity\\\":{\\\"urn\\\":\\\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.products,PROD)\\\",\\\"properties\\\":{\\\"name\\\":\\\"ledgerguard.public.products\\\"}}},{\\\"entity\\\":{\\\"urn\\\":\\\"urn:li:glossaryTerm:UnitConversion\\\",\\\"properties\\\":{\\\"name\\\":\\\"Unit Conversion\\\"}}},{\\\"entity\\\":{\\\"urn\\\":\\\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_movements,PROD)\\\",\\\"properties\\\":{\\\"name\\\":\\\"ledgergua\\u2026 (+2907 chars)\", \"ok\": true, \"duration_ms\": 610}"
+    }
+  ],
+  "activity_log": "examples/mcp/activity-log.jsonl",
+  "activity_entries": 5,
+  "passed": true
+}

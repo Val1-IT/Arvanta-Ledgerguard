@@ -1,0 +1,18 @@
+{
+  "target_urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)",
+  "write_path": "sdk",
+  "mutation_tools_available": [
+    "add_tags",
+    "update_description"
+  ],
+  "tag_written": true,
+  "note_written": true,
+  "tag_verified_via_mcp": true,
+  "note_verified_via_mcp": true,
+  "restored": false,
+  "activity_log": "examples/mcp/writeback-activity-log.jsonl",
+  "notes": [
+    "MCP mutation tools were present but rejected the write; the DataHub Python SDK was used as a documented fallback."
+  ],
+  "passed": true
+}

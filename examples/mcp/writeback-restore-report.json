@@ -1,0 +1,15 @@
+{
+  "target_urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)",
+  "write_path": "sdk",
+  "mutation_tools_available": [],
+  "tag_written": false,
+  "note_written": false,
+  "tag_verified_via_mcp": false,
+  "note_verified_via_mcp": false,
+  "restored": true,
+  "activity_log": "examples/mcp/writeback-activity-log.jsonl",
+  "notes": [
+    "Baseline restored: the dataset carries exactly the metadata declared in src/datahub/bootstrap/assets.py."
+  ],
+  "passed": false
+}

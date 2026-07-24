@@ -25,7 +25,15 @@
     "db:reset": "tsx src/db/reset.ts",
     "db:setup": "npm run db:up && npm run db:wait && npm run db:migrate && npm run db:seed",
     "db:wait": "tsx src/db/wait.ts",
-    "scenario:conversion-error": "tsx demo-data/scenarios/conversion-error.ts"
+    "scenario:conversion-error": "tsx demo-data/scenarios/conversion-error.ts",
+    "datahub:up": "node scripts/py.mjs -m datahub.entrypoints docker quickstart",
+    "datahub:down": "node scripts/py.mjs -m datahub.entrypoints docker quickstart --stop",
+    "datahub:status": "node scripts/py.mjs -m datahub.entrypoints docker check",
+    "datahub:bootstrap": "node scripts/py.mjs -m src.datahub.bootstrap",
+    "datahub:mcp-proof": "node scripts/py.mjs -m src.datahub.mcp.proof",
+    "datahub:writeback-proof": "node scripts/py.mjs -m src.datahub.mcp.writeback",
+    "datahub:metadata-reset": "node scripts/py.mjs -m src.datahub.mcp.writeback --restore",
+    "test:datahub": "vitest run --config vitest.datahub.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.36.4",

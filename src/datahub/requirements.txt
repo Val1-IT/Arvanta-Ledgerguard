@@ -1,0 +1,16 @@
+# Python tooling for the DataHub OSS bootstrap and the MCP connectivity proof.
+# Install into a local virtualenv:
+#   python -m venv .venv
+#   ./.venv/Scripts/pip install -r src/datahub/requirements.txt   (Windows)
+#   ./.venv/bin/pip install -r src/datahub/requirements.txt       (macOS / Linux)
+#
+# DataHub recommends Python 3.11; 3.12+ prints an "not actively tested" warning
+# but works for the operations used here.
+# `sql-parser` extra pulls in sqlglot/sqlparse/patchy, required by
+# datahub.sdk.lineage_client's transformation-text lineage path
+# (client.lineage.add_lineage(transformation_text=...)).
+acryl-datahub[datahub-rest,sql-parser]==1.6.0.15
+
+# MCP client used by the FASE 3B connectivity proof to talk to the official
+# self-hosted DataHub MCP server (mcp-server-datahub).
+mcp>=1.9.0

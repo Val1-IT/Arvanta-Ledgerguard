@@ -85,6 +85,43 @@ npm run db:nuke           # stop and DELETE this project's data volume
 npm run scenario:conversion-error   # apply the unit-conversion error scenario
 ```
 
+## DataHub (OSS / Core)
+
+LedgerGuard is built on **DataHub OSS / Core**, self-hosted. DataHub Cloud is an
+optional hosted alternative, never a requirement — the whole submission runs on
+OSS alone.
+
+Python tooling (bootstrap + MCP proofs) lives in a local virtualenv:
+
+```bash
+python -m venv .venv
+./.venv/Scripts/pip install -r src/datahub/requirements.txt   # Windows
+./.venv/bin/pip install -r src/datahub/requirements.txt       # macOS / Linux
+```
+
+```bash
+npm run datahub:up          # start DataHub OSS via the official quickstart
+npm run datahub:status      # health check
+npm run datahub:bootstrap   # provision datasets, lineage, owners, glossary, tags
+npm run datahub:down        # stop DataHub (data is preserved)
+```
+
+`datahub:bootstrap` is **idempotent** — every write is an upsert against a stable
+URN, so re-running converges on the same metadata instead of duplicating it.
+
+The agent reads its context through the **self-hosted DataHub MCP server**
+(`mcp-server-datahub`, installed by the requirements file above):
+
+```bash
+npm run datahub:mcp-proof         # 7-point MCP read proof + real activity log
+npm run datahub:writeback-proof   # tag/description write-back + read-after-write
+npm run datahub:metadata-reset    # restore the demo assets to their baseline
+```
+
+DataHub requires ~8 GB RAM and ~13 GB of disk. Set `DATAHUB_GMS_URL` and, if your
+instance has metadata-service auth enabled, `DATAHUB_GMS_TOKEN` in `.env`. Never
+expose GMS to the public internet without authentication.
+
 Validation:
 
 ```bash
@@ -93,6 +130,7 @@ npm run lint
 npm run test              # unit tests — no database required
 npm run build
 npm run test:integration  # requires a running, migrated, seeded database
+npm run test:datahub      # requires a running DataHub OSS + MCP server
 ```
 
 ## Safety

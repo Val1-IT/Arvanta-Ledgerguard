@@ -1,0 +1,45 @@
+{
+  "owner_groups": [
+    "urn:li:corpGroup:inventory-operations",
+    "urn:li:corpGroup:finance-controller",
+    "urn:li:corpGroup:data-platform"
+  ],
+  "tags": [
+    "urn:li:tag:ERP",
+    "urn:li:tag:Finance Critical",
+    "urn:li:tag:Inventory Critical",
+    "urn:li:tag:At Risk",
+    "urn:li:tag:Trusted",
+    "urn:li:tag:Requires Approval"
+  ],
+  "terms": [
+    "urn:li:glossaryTerm:UnitConversion",
+    "urn:li:glossaryTerm:InventoryValuation",
+    "urn:li:glossaryTerm:CostOfGoodsSold",
+    "urn:li:glossaryTerm:GrossMargin",
+    "urn:li:glossaryTerm:FinanciallyTrustedDataset"
+  ],
+  "datasets": [
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.products,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.product_units,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_movements,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.journal_entries,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.gross_margin_report,PROD)"
+  ],
+  "lineage_edges": [
+    "products -> inventory_movements",
+    "product_units -> inventory_movements",
+    "inventory_movements -> inventory_valuation",
+    "inventory_valuation -> journal_entries",
+    "journal_entries -> gross_margin_report"
+  ],
+  "column_lineage_edges": 13,
+  "assertions": [
+    "urn:li:assertion:ledgerguard_check_1_conversion_factor_positive",
+    "urn:li:assertion:ledgerguard_check_2_base_quantity_identity",
+    "urn:li:assertion:ledgerguard_check_3_journals_balanced",
+    "urn:li:assertion:ledgerguard_check_4_valuation_matches_movements",
+    "urn:li:assertion:ledgerguard_check_5_cogs_matches_ledger"
+  ]
+}
