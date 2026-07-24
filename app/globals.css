@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --cream: #f6f0e4;
+  --cream-panel: #fffcf5;
+  --ink: #1a1d24;
+  --gold: #e8b441;
+}
+
+html,
+body {
+  background-color: var(--cream);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .lg-panel {
+    @apply rounded-xl border-2 border-ink bg-cream-panel shadow-brutal;
+  }
+
+  .lg-panel-sm {
+    @apply rounded-lg border-2 border-ink bg-cream-panel shadow-brutal-sm;
+  }
+
+  .lg-btn {
+    @apply inline-flex items-center gap-2 rounded-lg border-2 border-ink bg-cream-panel px-4 py-2
+      font-semibold text-ink shadow-brutal-sm transition-transform
+      hover:-translate-y-0.5 active:translate-y-0 active:shadow-none disabled:opacity-50;
+  }
+
+  .lg-btn-gold {
+    @apply lg-btn bg-gold;
+  }
+
+  .lg-tag {
+    @apply inline-flex items-center rounded-md border-2 border-ink px-2 py-0.5 text-xs font-bold uppercase tracking-wide;
+  }
+}

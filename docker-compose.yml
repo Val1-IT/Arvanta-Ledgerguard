@@ -1,0 +1,27 @@
+# Demo infrastructure for LedgerGuard.
+# Only PostgreSQL is defined here. DataHub is intentionally NOT run from this
+# file: it is provisioned separately (DataHub Cloud, or the official DataHub
+# OSS quickstart on a dedicated host) so that the demo database and DataHub
+# have independent lifecycles and neither touches Arvanta infrastructure.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ledgerguard-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ledgerguard
+      POSTGRES_PASSWORD: ledgerguard
+      POSTGRES_DB: ledgerguard
+    ports:
+      # Host 5433 to avoid clashing with any local 5432 Postgres.
+      - '5433:5432'
+    volumes:
+      - ledgerguard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ledgerguard -d ledgerguard']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ledgerguard_pgdata:

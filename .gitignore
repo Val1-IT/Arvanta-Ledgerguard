@@ -1,0 +1,45 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# typescript build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# production
+/build
+/dist
+
+# env / secrets — never commit real credentials
+.env
+.env.local
+.env.*.local
+*.pem
+
+# drizzle generated artifacts kept, but ignore local journal caches
+/drizzle/meta/_journal.tmp
+
+# testing
+/coverage
+/test-results
+/playwright-report
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# misc
+/tmp
