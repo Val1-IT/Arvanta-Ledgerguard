@@ -385,14 +385,391 @@ This contract covers **investigation only** (FASE 5). It does **not** cover:
 - Any DataHub write-back beyond the investigation note + `At Risk` tag described in
   §4.2/§5 (i.e. no `Trusted` tag, no incident resolution, no removal of `At Risk`).
 
-That workflow is FASE 6, specified separately (see the implementation plan,
-§12 "FASE 6"). Its endpoints/state machine will be documented as a follow-up to this
-file once built — the `recommendedNextStep: 'REQUEST_APPROVAL'` value described in
-§4.1 is where FASE 6 picks up, not something this contract implements. Do not build
-approval/execution UI against a schema this document doesn't define; wait for the
-FASE 6 addendum.
+That workflow is FASE 6, now built and specified in full in §9 below. The
+`recommendedNextStep: 'REQUEST_APPROVAL'` value described in §4.1 is where FASE 6
+picks up: `investigationId` from that completed investigation is the required input to
+§9.2's plan generator.
 
-## 9. No UI implementation in this repository from this point
+## 9. FASE 6 — remediation approval & execution workflow
+
+Everything in this section covers **remediation only**: turning a completed
+investigation (§1-§8) into an approved, executed, and DataHub-verified correction.
+Every schema and function signature below is copied from real runtime source —
+`src/remediation/types.ts`, `src/remediation/generate-plan.ts`,
+`src/remediation/approve.ts`, `src/remediation/execute.ts`,
+`src/remediation/writeback.ts`, and `src/db/repositories/remediation-plans.ts` — and is
+exercised end to end by real Postgres in `tests/integration/remediation.test.ts` (11
+tests) and by a live DataHub MCP server in `tests/datahub/remediation-resolve.test.ts`
+(2 tests).
+
+### 9.0 No HTTP/Server Action wrapper yet — same situation as §1
+
+Exactly like investigation (§1), there is currently **no Server Action and no Route
+Handler** for any part of this workflow — only plain async functions in
+`src/remediation/*` that a caller (Server Action, Route Handler, script) can invoke
+directly. If the final UI needs this over HTTP, a thin wrapper around each function in
+§9.2/§9.6/§9.7/§9.8 is the only work required; this document specifies the exact
+input/output shape that wrapper would pass through unchanged.
+
+There is also no `listRemediationPlans`-style query yet (e.g. "all plans for this
+investigation" or "all plans pending approval") — only `loadRemediationPlan(pool,
+planId)` (§9.3), which requires already knowing the plan's id. A UI that needs a list
+view will need that query built first; it does not exist as of this document.
+
+### 9.1 State machine (`RemediationPlanStateSchema`)
+
+```ts
+type RemediationPlanState =
+  | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED'
+  | 'EXECUTING' | 'EXECUTION_FAILED'
+  | 'VERIFYING' | 'VERIFICATION_FAILED'
+  | 'RESOLVED';
+```
+
+Allowed transitions (`ALLOWED_TRANSITIONS`, `src/remediation/types.ts`) — anything not
+listed is rejected with `InvalidTransitionError` (§9.10), including every transition out
+of a terminal state (`REJECTED`, `EXECUTION_FAILED`, `VERIFICATION_FAILED`, `RESOLVED`):
+
+```
+DRAFT             -> PENDING_APPROVAL
+PENDING_APPROVAL  -> APPROVED | REJECTED
+APPROVED          -> EXECUTING
+EXECUTING         -> EXECUTION_FAILED | VERIFYING
+VERIFYING         -> VERIFICATION_FAILED | RESOLVED
+```
+
+A UI progress-stepper can render this exact graph. `REJECTED`, `EXECUTION_FAILED`, and
+`VERIFICATION_FAILED` are all dead ends for a given plan — the only recovery path is
+generating a brand-new plan (§9.2) from the same (or a re-run) investigation, never
+retrying the same plan id.
+
+### 9.2 Generate a plan — `createRemediationPlan`
+
+Source: `src/remediation/approve.ts` (wraps `generateRemediationPlan` +
+persistence). This is the only way a plan is ever created, and the only place
+`proposedCorrections`/`verificationExpectations` are produced — always copied verbatim
+from a fresh `investigate()` run against current live data, never LLM-authored, never
+hand-edited (§9.4 marks these fields accordingly).
+
+```ts
+async function createRemediationPlan(
+  input: { investigationId: string; requestedBy: string },
+  deps: { pool: Pool; now?: () => Date; idGenerator?: () => string }
+): Promise<RemediationPlanRecord>  // starts in state 'DRAFT', version 1
+```
+
+`investigationId` must reference a §3 investigation record whose `finalState` is
+`INVESTIGATION_COMPLETED`. Preconditions and their exact thrown errors (verbatim from
+source, safe to pattern-match on in a UI's error handling):
+
+| Condition | Error |
+|---|---|
+| No investigation with that id | `Error('Investigation not found: ${investigationId}')` |
+| Investigation exists but did not complete | `Error('Cannot generate a remediation plan from an investigation that did not complete (investigationId=..., finalState=...)')` |
+| Live data no longer shows an incident (already fixed, or stale) | `NoRemediableIncidentError('No remediable incident detected: investigate() found no root cause against current live data...')` |
+| Live incident exists but yields zero corrections | `NoRemediableIncidentError('investigate() produced no proposed corrections for the current root cause.')` |
+
+A UI should treat `NoRemediableIncidentError` as a normal, expected outcome (surface
+"nothing to remediate" rather than an error banner) and the two `Error` cases as
+programmer/caller errors (a bad or stale `investigationId`), not something an end user
+action should be able to trigger if the UI only ever passes an `investigationId` it
+just received from a completed investigation.
+
+### 9.3 Get a plan — `loadRemediationPlan`
+
+Source: `src/db/repositories/remediation-plans.ts`. Returns `RemediationPlanRecord |
+null` (`null` if no row matches).
+
+```ts
+async function loadRemediationPlan(pool: Queryable, planId: string): Promise<RemediationPlanRecord | null>
+```
+
+### 9.4 `RemediationPlanRecord` — full shape
+
+```ts
+{
+  schemaVersion: '1.0';
+  id: string;
+  investigationId: string;   // links back to §3's investigation_runs row
+  incidentId: string;
+  productId: string;
+  triggerAsset: string;
+  requestedBy: string;       // who/what requested plan generation
+
+  state: RemediationPlanState;  // §9.1
+  version: number;              // optimistic-concurrency token — see §9.6/9.7/9.8
+
+  // Snapshot taken once at generation time (§9.2), never re-derived here later.
+  // Always copied verbatim from the deterministic engine — never model-authored,
+  // never hand-edited. See §9.5 for the element shapes.
+  proposedCorrections: ProposedCorrection[];
+  verificationExpectations: VerificationExpectation[];
+
+  // Populated by decideRemediationPlan (§9.7); all null until then.
+  approvalAction: 'APPROVE' | 'REJECT' | 'KEEP_REPORTS_FROZEN' | null;
+  approvedBy: string | null;
+  approvalNote: string | null;
+  approvedAt: string | null;  // ISO 8601
+
+  // Populated by executeRemediationPlan (§9.8); both null until execution runs.
+  executionResult: RemediationExecutionResult | null;
+  executedAt: string | null;  // ISO 8601
+
+  // Populated by executeRemediationPlan when it reaches VERIFYING; null before that.
+  verification: { verifiedAt: string; result: VerificationResult } | null;
+
+  // Populated only after a RESOLVED plan's DataHub write-back is attempted (§9.9);
+  // null for every other state, including REJECTED/EXECUTION_FAILED/VERIFICATION_FAILED.
+  datahubWriteback: {
+    attemptedAt: string;
+    outcome: 'SYNCED' | 'FAILED';
+    atRiskTagRemoved: boolean;
+    trustedTagAdded: boolean;
+    message: string | null;   // non-null only when outcome is 'FAILED'
+  } | null;
+
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601, bumped on every state transition
+}
+```
+
+Every mutating call in §9.2/§9.6/§9.7/§9.8/§9.9 returns the full, freshly-loaded record
+after its own transition — a UI never needs a separate re-fetch to see the effect of an
+action it just took.
+
+### 9.5 `ProposedCorrection` / `VerificationExpectation` / `VerificationResult`
+
+These are engine types (`src/engine/types.ts`), reused verbatim inside a remediation
+plan — not redefined by the remediation layer.
+
+```ts
+// One per correction the engine proposes, in execution order (`sequence`).
+{
+  sequence: number;           // 1-based, execution order — never re-sorted by the UI
+  action: 'RESTORE_CONVERSION_FACTOR' | 'RECOMPUTE_INVENTORY_MOVEMENT'
+        | 'REGENERATE_INVENTORY_VALUATION' | 'REGENERATE_GROSS_MARGIN_REPORT'
+        | 'RECONCILE_JOURNAL_ENTRIES';
+  table: string;               // e.g. "product_units"
+  recordId: string;
+  field: string;               // e.g. "conversion_factor"
+  beforeValue: string;         // decimal string — see §4.3's precision note, same rule applies here
+  afterValue: string;          // decimal string
+  financialDelta: string | null; // decimal string, IDR, when this step has a direct P&L effect
+  rollbackAssumption: string;  // prose explaining what this step assumes/why it's safe
+}
+```
+
+```ts
+// What post-execution verification (§9.8) is expected to confirm.
+{ checkId: string; expectedStatus: 'PASS' | 'FAIL'; description: string }
+```
+
+```ts
+// The actual post-execution verification outcome (src/engine/verify.ts's own result
+// shape, reused as-is).
+{
+  overallStatus: 'PASS' | 'FAIL';
+  checks: Array<{
+    checkId: string;
+    status: 'PASS' | 'FAIL';
+    severity: 'info' | 'warning' | 'critical';
+    expected: string;
+    actual: string;
+    affectedRecordIds: string[];
+    evidence: EvidenceItem[]; // same EvidenceItem shape the investigation engine uses elsewhere
+    remediationHint: string;
+  }>;
+}
+```
+
+`RECONCILE_JOURNAL_ENTRIES` never issues a write (it only re-confirms the ledger-posted
+COGS the plan was built against still matches) — a UI can still render it as a normal
+step in the ordered list; its `financialDelta` is always `null` and its execution-time
+status (§9.8) is `APPLIED` regardless, since "confirmed unchanged" is its success case.
+
+### 9.6 Submit for approval — `submitRemediationPlanForApproval`
+
+Source: `src/remediation/approve.ts`. Moves `DRAFT -> PENDING_APPROVAL`.
+
+```ts
+async function submitRemediationPlanForApproval(
+  pool: Pool,
+  input: { planId: string; expectedVersion: number },
+  now?: () => Date
+): Promise<RemediationPlanRecord>
+```
+
+`expectedVersion` must equal the plan's current `version` (from the last record a
+caller loaded/received) — this is the optimistic-concurrency guard shared by every
+mutating call in this section (§9.10). Submitting a plan a second time (already past
+`DRAFT`) throws `InvalidTransitionError`.
+
+### 9.7 Approve or reject — `decideRemediationPlan`
+
+Source: `src/remediation/approve.ts`. From `PENDING_APPROVAL`, moves to `APPROVED`
+(action `APPROVE`) or `REJECTED` (action `REJECT` or `KEEP_REPORTS_FROZEN`).
+
+```ts
+async function decideRemediationPlan(
+  pool: Pool,
+  input: {
+    planId: string;
+    expectedVersion: number;
+    action: 'APPROVE' | 'REJECT' | 'KEEP_REPORTS_FROZEN';
+    decidedBy: string;
+    note?: string | null;
+  },
+  now?: () => Date
+): Promise<RemediationPlanRecord>
+```
+
+**`REJECT` vs `KEEP_REPORTS_FROZEN` — both land on `REJECTED`, and execution never
+starts either way**, but the distinction is preserved on `approvalAction` for the UI and
+for audit: `REJECT` means "this specific plan/correction was judged wrong"; `KEEP_REPORTS_FROZEN`
+means "the incident is acknowledged, but remediation is deliberately deferred — the
+DataHub `At Risk` tag from the original investigation (§5's write-back) is intentionally
+left in place, since nothing has actually been fixed." Neither path touches DataHub
+itself here — there is simply no write-back call in either branch, so whatever `At Risk`
+state the FASE 5 investigation already set stands unchanged. A UI should offer these as
+two distinct buttons/reasons, not one generic "Reject."
+
+### 9.8 Execute — `executeRemediationPlan`
+
+Source: `src/remediation/execute.ts`. From `APPROVED`, moves through
+`EXECUTING -> VERIFYING -> RESOLVED` (success) or aborts to `EXECUTION_FAILED` /
+`VERIFICATION_FAILED` (§9.1). This is the only function in the whole codebase that
+writes to ERP tables as part of remediation, and it never touches `journal_entries`.
+
+```ts
+async function executeRemediationPlan(
+  input: { planId: string; expectedVersion: number },
+  deps: { pool: Pool; now?: () => Date }
+): Promise<RemediationPlanRecord>
+```
+
+Calling this on a plan that is not `APPROVED` throws `InvalidTransitionError` — there is
+no way to execute a `DRAFT`, `PENDING_APPROVAL`, or already-terminal plan.
+
+**What happens internally** (a UI does not call these steps individually — this is one
+atomic call — but understanding them explains `executionResult`/`verification`/possible
+failure states):
+
+1. Plan transitions to `EXECUTING` (its own immediately-committed row update).
+2. A fresh `investigate()` re-run's `proposedCorrections` are compared against the
+   plan's stored snapshot (§9.2). Any difference — the underlying data changed, or the
+   incident was already fixed by some other path since approval — aborts immediately to
+   `EXECUTION_FAILED` with `executionResult.failureReason: 'DRIFT_DETECTED'`. Nothing is
+   written.
+3. Otherwise, each `proposedCorrections` entry is applied in `sequence` order inside a
+   single database transaction. Any SQL failure aborts to `EXECUTION_FAILED` with
+   `failureReason: 'SQL_ERROR'` and a full rollback — no partial application is ever
+   possible.
+4. If every step applies, the plan transitions to `VERIFYING` and the same verification
+   engine used elsewhere (`src/engine/verify.ts`) re-runs against the transaction's own
+   in-progress writes, before `COMMIT`.
+5. Verification `PASS` -> `COMMIT`, plan moves to `RESOLVED`. Verification `FAIL` ->
+   `ROLLBACK` (nothing persisted), plan moves to `VERIFICATION_FAILED`. Either way,
+   `executionResult` and `verification` are both populated on the returned record —
+   `VERIFICATION_FAILED` always means "nothing was persisted to the ERP tables," never
+   "persisted but wrong."
+
+```ts
+// executionResult shape, populated on every terminal outcome of this call:
+{
+  startedAt: string; finishedAt: string; // ISO 8601
+  steps: Array<{
+    sequence: number;
+    action: ProposedCorrectionAction;   // §9.5
+    table: string; recordId: string;
+    status: 'APPLIED' | 'SKIPPED_NO_WRITE' | 'FAILED';
+    detail: string;                     // e.g. "conversion_factor: 12 -> 24", or the SQL error text
+  }>;
+  failureReason: 'DRIFT_DETECTED' | 'SQL_ERROR' | null;  // null only when RESOLVED
+  failureDetail: string | null;                          // null only when RESOLVED
+}
+```
+
+A UI can render `steps` as a checklist matching `proposedCorrections`' order 1:1 — the
+happy path shows every step `APPLIED`; a `SQL_ERROR` abort shows every step up to and
+including the failing one, with later steps simply absent from the array (they were
+never attempted).
+
+### 9.9 DataHub resolution write-back — `writebackRemediationResolution`
+
+Source: `src/remediation/writeback.ts`. The only step that runs after a plan reaches
+`RESOLVED` with a `PASS` verification — it removes the `At Risk` DataHub tag that FASE 5
+originally set (§4.2/§5) and adds `Trusted` on top, since verification already confirmed
+every integrity check currently passes.
+
+```ts
+async function writebackRemediationResolution(
+  input: { planId: string },
+  deps: { pool: Pool; now?: () => Date }
+): Promise<RemediationPlanRecord>
+```
+
+Throws the same `Error('DataHub resolution write-back is only valid for a RESOLVED plan
+with a PASSing verification (planId=..., state=...)')` if called on any other state —
+a UI should only ever offer/trigger this immediately after §9.8 returns a `RESOLVED`
+record, never as a standalone user action independent of that.
+
+**This call never changes the plan's `state`** — `RESOLVED` already means the incident
+is fixed and verified in the ERP database; a DataHub metadata-sync hiccup on top of that
+is a separate, best-effort concern recorded only in `datahubWriteback` (§9.4). A UI
+should therefore treat a `RESOLVED` plan with `datahubWriteback.outcome: 'FAILED'` as
+"the fix is real and committed, but DataHub's tags may be stale — retry the write-back
+or fix DataHub manually," never as "the remediation itself failed."
+
+Real example of a successful `datahubWriteback` (verified live via `tests/datahub/remediation-resolve.test.ts`
+against the same `agent_bridge.py resolve` subcommand this function calls):
+
+```json
+{
+  "attemptedAt": "2026-07-24T16:38:59.418Z",
+  "outcome": "SYNCED",
+  "atRiskTagRemoved": true,
+  "trustedTagAdded": true,
+  "message": null
+}
+```
+
+### 9.10 Errors thrown by this workflow
+
+All three are real `Error` subclasses (`src/remediation/types.ts`) with `instanceof`-checkable
+identity — a UI's error handling can branch on class, not on parsing message text:
+
+| Error | When | Fields |
+|---|---|---|
+| `RemediationPlanNotFoundError` | Any call given a `planId` with no matching row | `.planId` |
+| `OptimisticConcurrencyError` | A mutating call's `expectedVersion` no longer matches the plan's current `version` — someone else already transitioned it | `.planId`, `.expectedVersion` |
+| `InvalidTransitionError` | A mutating call's requested transition is not in `ALLOWED_TRANSITIONS` (§9.1) for the plan's current state | `.planId`, `.from`, `.to` |
+
+`OptimisticConcurrencyError` is the concurrency contract a UI must respect: always pass
+the `version` from the most recent record you actually have in hand, and on catching
+this error, re-`loadRemediationPlan` (§9.3) to get the current state/version before
+retrying or informing the user someone else already acted on this plan.
+
+### 9.11 Full example walk-through
+
+Real state sequence from `tests/integration/remediation.test.ts`'s happy-path test
+(`DRAFT->PENDING_APPROVAL->APPROVED->RESOLVED actually restores ERP data...`), run
+against real Postgres:
+
+```
+createRemediationPlan(...)                                    -> state: DRAFT,     version: 1
+submitRemediationPlanForApproval({planId, expectedVersion: 1}) -> state: PENDING_APPROVAL, version: 2
+decideRemediationPlan({..., expectedVersion: 2, action: 'APPROVE'}) -> state: APPROVED,  version: 3
+executeRemediationPlan({planId, expectedVersion: 3})
+  (internally: EXECUTING v4 -> VERIFYING v5 -> RESOLVED v6)     -> state: RESOLVED,  version: 6
+writebackRemediationResolution({planId})                       -> state: RESOLVED (unchanged), datahubWriteback populated
+```
+
+Each call's `version` in the response is exactly what the next call must pass as
+`expectedVersion` — a UI holding a stale record (e.g. a background tab that hasn't
+re-fetched) will get `OptimisticConcurrencyError` (§9.10) rather than silently
+clobbering a decision made elsewhere.
+
+## 10. No UI implementation in this repository from this point
 
 Per the project's current division of labor, all remaining UI/visual/responsive/design
 work is done separately (in Cursor). `app/agent/*` is a minimum test harness only (see

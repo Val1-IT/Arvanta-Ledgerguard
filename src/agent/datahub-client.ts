@@ -75,6 +75,8 @@ interface BridgeRawResult {
   writePath?: 'mcp' | 'sdk';
   tagWritten?: boolean;
   noteWritten?: boolean;
+  atRiskTagRemoved?: boolean;
+  trustedTagAdded?: boolean;
 }
 
 export class DataHubBridgeError extends Error {
@@ -100,7 +102,15 @@ export interface DataHubWritebackResult {
   activityLog: ActivityLogEntry[];
 }
 
-function runBridge(command: 'read' | 'writeback', payload: Record<string, unknown>): Promise<BridgeRawResult> {
+export interface DataHubResolutionResult {
+  writePath: 'mcp' | 'sdk';
+  atRiskTagRemoved: boolean;
+  trustedTagAdded: boolean;
+  noteWritten: boolean;
+  activityLog: ActivityLogEntry[];
+}
+
+function runBridge(command: 'read' | 'writeback' | 'resolve', payload: Record<string, unknown>): Promise<BridgeRawResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(resolveInterpreter(), ['-m', 'src.datahub.mcp.agent_bridge', command], {
       cwd: repoRoot,
@@ -165,6 +175,31 @@ export async function writeInvestigationSummary(targetAsset: string, summaryText
   return {
     writePath: raw.writePath,
     tagWritten: raw.tagWritten ?? false,
+    noteWritten: raw.noteWritten ?? false,
+    activityLog
+  };
+}
+
+// FASE 6 — post-remediation resolution write-back. Removes the `At Risk` tag
+// (this is only ever called once a remediation plan's data transaction has
+// already committed and post-write verification passed — see
+// src/remediation/writeback.ts) and, when the caller has independently
+// determined the asset is now fully clean, adds `Trusted` on top. Never
+// called speculatively or before verification PASSes.
+export async function resolveDataHubIncident(
+  targetAsset: string,
+  addTrustedTag: boolean,
+  summaryText: string
+): Promise<DataHubResolutionResult> {
+  const raw = await runBridge('resolve', { targetAsset, addTrustedTag, summaryText });
+  const activityLog = (raw.activityLog ?? []).map(mapActivityEntry);
+  if (!raw.ok || raw.writePath === undefined) {
+    throw new DataHubBridgeError('WRITEBACK_FAILED', raw.message ?? 'Unknown DataHub resolution write-back failure.', activityLog);
+  }
+  return {
+    writePath: raw.writePath,
+    atRiskTagRemoved: raw.atRiskTagRemoved ?? false,
+    trustedTagAdded: raw.trustedTagAdded ?? false,
     noteWritten: raw.noteWritten ?? false,
     activityLog
   };

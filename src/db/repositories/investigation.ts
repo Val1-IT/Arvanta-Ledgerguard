@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Queryable } from '../queryable';
 import type { InvestigationInput } from '../../engine/types';
 import { fetchProducts, fetchProductUnits } from './products';
 import { fetchInventoryMovements, fetchInventoryValuations } from './inventory';
@@ -11,8 +11,13 @@ import { fetchGrossMarginReports, fetchBaselineSnapshot } from './reports';
  * this repeatedly never mutates state and never produces duplicate
  * incident-side data. Any future persistence of investigation runs must be
  * a separate, explicitly-invoked function — not folded into this one.
+ *
+ * Accepts a Queryable (Pool or PoolClient) so it can also be called mid-
+ * transaction — see src/remediation/execute.ts, which re-runs this against
+ * the in-progress transaction client for pre-commit drift detection and
+ * post-write verification.
  */
-export async function loadInvestigationInput(pool: Pool): Promise<InvestigationInput> {
+export async function loadInvestigationInput(pool: Queryable): Promise<InvestigationInput> {
   const [products, productUnits, movements, valuations, journalEntries, marginReports, baseline] = await Promise.all([
     fetchProducts(pool),
     fetchProductUnits(pool),

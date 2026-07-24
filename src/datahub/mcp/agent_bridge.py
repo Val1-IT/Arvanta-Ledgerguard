@@ -1,14 +1,16 @@
-"""FASE 5 — TypeScript-facing bridge for the DataHub-aware investigation agent.
+"""FASE 5/6 — TypeScript-facing bridge for the DataHub-aware investigation agent.
 
-Exposes two subcommands, each reading a single JSON object from stdin and
+Exposes three subcommands, each reading a single JSON object from stdin and
 writing a single JSON object to stdout, so a Node subprocess wrapper
-(src/agent/datahub-client.ts) can drive one real MCP interaction per call
-without re-implementing any of session.py/proof.py/writeback.py's connection,
-tool-resolution, or write-path logic — it reuses that exact, already-proven
-code path instead of a separate, unproven one.
+(src/agent/datahub-client.ts, src/remediation/writeback.ts) can drive one real
+MCP interaction per call without re-implementing any of
+session.py/proof.py/writeback.py's connection, tool-resolution, or write-path
+logic — it reuses that exact, already-proven code path instead of a separate,
+unproven one.
 
     python -m src.datahub.mcp.agent_bridge read      < input.json > output.json
     python -m src.datahub.mcp.agent_bridge writeback < input.json > output.json
+    python -m src.datahub.mcp.agent_bridge resolve   < input.json > output.json
 
 `read` input:  {"triggerAsset": "product_units"}
 `read` output: {"ok": true, "datahubContext": {...}, "activityLog": [...]}
@@ -19,11 +21,25 @@ code path instead of a separate, unproven one.
                       "noteWritten": true, "activityLog": [...]}
                   or {"ok": false, "failureState": "WRITEBACK_FAILED", ...}
 
-Neither subcommand writes its own activity-log file — the caller (the
-TypeScript orchestrator) owns assembling the final, per-investigation
-activity log from the JSON `activityLog` this bridge returns, since one
-investigation spans multiple bridge invocations (read, then optionally
-writeback) whose entries must be combined, not overwritten.
+`resolve` input:  {"targetAsset": "product_units", "addTrustedTag": true, "summaryText": "..."}
+`resolve` output: {"ok": true, "writePath": "mcp"|"sdk", "atRiskTagRemoved": true,
+                    "trustedTagAdded": true, "noteWritten": true, "activityLog": [...]}
+                or {"ok": false, "failureState": "WRITEBACK_FAILED", ...}
+
+`resolve` is FASE 6's post-remediation counterpart to `writeback`: it removes
+the `At Risk` tag (always attempted — a plan only ever reaches RESOLVED after
+the ERP data transaction committed and post-write verification passed, so the
+incident this tag represents is over) and, only when the caller says the
+asset is now fully clean (`addTrustedTag: true`), adds `Trusted` on top. It
+never removes `At Risk` from an asset the caller has not confirmed is
+resolved — that decision is made once, by src/remediation/writeback.ts, from
+the plan's own verification result, never re-derived here.
+
+No subcommand writes its own activity-log file — the caller (the TypeScript
+orchestrator / remediation writeback module) owns assembling the final,
+per-investigation or per-plan activity log from the JSON `activityLog` this
+bridge returns, since one investigation or remediation spans multiple bridge
+invocations whose entries must be combined, not overwritten.
 """
 
 from __future__ import annotations
@@ -35,13 +51,12 @@ import sys
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
-from ..bootstrap.assets import DATASETS, GROSS_MARGIN_REPORT, TAG_AT_RISK, DatasetDef
+from ..bootstrap.assets import DATASETS, GROSS_MARGIN_REPORT, TAG_AT_RISK, TAG_TRUSTED, DatasetDef
 from ..bootstrap.bootstrap import _to_dataset
 from ..bootstrap.config import make_client
 from .proof import ENTITY_TOOLS, LINEAGE_TOOLS, SCHEMA_FIELD_TOOLS, SEARCH_TOOLS, _fields, _lineage, _pick, _read_entity, _search
 from .session import LoggedMcpSession, open_mcp_session
 from .writeback import ADD_TAG_TOOLS, DESCRIPTION_TOOLS, _try_call
-
 
 def _dataset_by_table(table: str) -> Optional[DatasetDef]:
     for d in DATASETS:
@@ -49,10 +64,8 @@ def _dataset_by_table(table: str) -> Optional[DatasetDef]:
             return d
     return None
 
-
 def _activity_entries(session: LoggedMcpSession) -> List[Dict[str, Any]]:
     return [asdict(e) for e in session.entries]
-
 
 async def _do_read(payload: Dict[str, Any]) -> Dict[str, Any]:
     trigger_table = payload["triggerAsset"]
@@ -143,7 +156,6 @@ async def _do_read(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         return {"ok": False, "failureState": "MCP_UNAVAILABLE", "message": f"{type(exc).__name__}: {exc}"}
 
-
 # Marks the region of a dataset's description that this bridge owns. Every
 # write-back replaces the ENTIRE region between these markers, never appends
 # to it — so calling this bridge N times (whether the caller is retrying the
@@ -155,7 +167,6 @@ async def _do_read(payload: Dict[str, Any]) -> Dict[str, Any]:
 # states which investigationId produced the current note.
 NOTE_MARKER_START = "<!-- ledgerguard:investigation-note:start -->"
 NOTE_MARKER_END = "<!-- ledgerguard:investigation-note:end -->"
-
 
 def _base_description(dataset: DatasetDef) -> str:
     """The description to build a fresh note on top of.
@@ -176,12 +187,123 @@ def _base_description(dataset: DatasetDef) -> str:
         return dataset.description.rstrip()
     return dataset.description[:start].rstrip()
 
-
 def _compose_note_text(dataset: DatasetDef, summary_text: str) -> str:
     base = _base_description(dataset)
     marker_block = f"{NOTE_MARKER_START}\n{summary_text}\n{NOTE_MARKER_END}"
     return f"{base}\n\n{marker_block}" if base else marker_block
 
+# Mirrors ADD_TAG_TOOLS' pattern of naming every candidate tool name this
+# server build might expose, rather than assuming one exact name — the same
+# defensive posture already proven out for add_tags/update_description below.
+# "remove_tags" is the name confirmed live against the real MCP server (see
+# src/datahub/mcp/mutation_proof.py); "remove_tag" is kept as a fallback for
+# a differently-versioned server build, exactly like ADD_TAG_TOOLS does for
+# add_tags/add_tag.
+REMOVE_TAG_TOOLS = ("remove_tags", "remove_tag")
+
+async def _do_resolve(payload: Dict[str, Any]) -> Dict[str, Any]:
+    target_table = payload["targetAsset"]
+    add_trusted_tag = bool(payload.get("addTrustedTag", False))
+    summary_text = payload["summaryText"]
+    dataset = _dataset_by_table(target_table)
+    if dataset is None:
+        return {"ok": False, "failureState": "DATASET_NOT_FOUND", "message": f"Unknown asset: {target_table}"}
+
+    try:
+        async with open_mcp_session(enable_mutations=True) as session:
+            remove_tag_tool = _pick(session.tools, REMOVE_TAG_TOOLS)
+            add_tag_tool = _pick(session.tools, ADD_TAG_TOOLS)
+            desc_tool = _pick(session.tools, DESCRIPTION_TOOLS)
+            entity_tool = _pick(session.tools, ENTITY_TOOLS)
+
+            at_risk_tag_removed = False
+            if remove_tag_tool:
+                at_risk_tag_removed = await _try_call(
+                    session,
+                    remove_tag_tool,
+                    [
+                        {"tag_urns": [TAG_AT_RISK.urn], "entity_urns": [dataset.urn]},
+                        {"urn": dataset.urn, "tag_urns": [TAG_AT_RISK.urn]},
+                        {"entity_urn": dataset.urn, "tag_urns": [TAG_AT_RISK.urn]},
+                    ],
+                )
+
+            trusted_tag_added = False
+            if add_trusted_tag and add_tag_tool:
+                trusted_tag_added = await _try_call(
+                    session,
+                    add_tag_tool,
+                    [
+                        {"tag_urns": [TAG_TRUSTED.urn], "entity_urns": [dataset.urn]},
+                        {"urn": dataset.urn, "tag_urns": [TAG_TRUSTED.urn]},
+                        {"entity_urn": dataset.urn, "tag_urns": [TAG_TRUSTED.urn]},
+                    ],
+                )
+
+            note_text = _compose_note_text(dataset, summary_text)
+            note_written = False
+            if desc_tool:
+                note_written = await _try_call(
+                    session,
+                    desc_tool,
+                    [
+                        {"urn": dataset.urn, "description": note_text},
+                        {"entity_urn": dataset.urn, "description": note_text},
+                    ],
+                )
+
+            write_path = "mcp"
+            note_or_trusted_needs_sdk = not note_written or (add_trusted_tag and not trusted_tag_added)
+            if note_or_trusted_needs_sdk:
+                client = make_client()
+                sdk_dataset = _to_dataset(dataset)
+                sdk_dataset.set_description(note_text)
+                if add_trusted_tag:
+                    sdk_dataset.add_tag(TAG_TRUSTED.urn)
+                client.entities.upsert(sdk_dataset)
+                trusted_tag_added = add_trusted_tag
+                note_written = True
+                write_path = "sdk"
+
+            if not entity_tool:
+                return {
+                    "ok": False,
+                    "failureState": "WRITEBACK_FAILED",
+                    "message": "No MCP entity-read tool available to verify the write.",
+                    "activityLog": _activity_entries(session),
+                }
+
+            verified = False
+            for attempt in range(3):
+                if attempt > 0:
+                    await asyncio.sleep(0.5 * attempt)
+                readback = await _read_entity(session, entity_tool, dataset.urn)
+                readback_normalized = readback.replace("\\n", "\n").replace("\\r", "\n")
+                at_risk_gone = TAG_AT_RISK.urn not in readback
+                trusted_present = (not add_trusted_tag) or (TAG_TRUSTED.urn in readback or "Trusted" in readback)
+                note_verified = summary_text[:80] in readback_normalized
+                verified = at_risk_gone and trusted_present and note_verified
+                if verified:
+                    break
+
+            if not verified:
+                return {
+                    "ok": False,
+                    "failureState": "WRITEBACK_FAILED",
+                    "message": "Resolution write-back could not be verified via an MCP read-back.",
+                    "activityLog": _activity_entries(session),
+                }
+
+            return {
+                "ok": True,
+                "writePath": write_path,
+                "atRiskTagRemoved": at_risk_tag_removed,
+                "trustedTagAdded": trusted_tag_added,
+                "noteWritten": note_written,
+                "activityLog": _activity_entries(session),
+            }
+    except Exception as exc:
+        return {"ok": False, "failureState": "WRITEBACK_FAILED", "message": f"{type(exc).__name__}: {exc}"}
 
 async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
     target_table = payload["targetAsset"]
@@ -222,9 +344,6 @@ async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
 
             write_path = "mcp"
             if not (tag_written and note_written):
-                # SDK fallback is never silent: write_path always records which
-                # path actually ran, and this branch only runs when MCP itself
-                # exposed no working mutation tool for one of the two writes.
                 client = make_client()
                 sdk_dataset = _to_dataset(dataset)
                 sdk_dataset.set_description(note_text)
@@ -243,11 +362,6 @@ async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
                 }
 
             readback = await _read_entity(session, entity_tool, dataset.urn)
-            # The MCP entity tool returns JSON-serialized text, where real
-            # newlines inside string fields come back as the two-character
-            # escape sequence \n — normalize before substring-matching a
-            # multi-line summary_text, or every note containing a newline in
-            # its first 80 characters would spuriously fail verification.
             readback_normalized = readback.replace("\\n", "\n").replace("\\r", "\n")
             tag_verified = TAG_AT_RISK.urn in readback or "At Risk" in readback
             note_verified = summary_text[:80] in readback_normalized
@@ -270,15 +384,14 @@ async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as exc:
         return {"ok": False, "failureState": "WRITEBACK_FAILED", "message": f"{type(exc).__name__}: {exc}"}
 
-
 def main() -> None:
-    if len(sys.argv) < 2 or sys.argv[1] not in ("read", "writeback"):
+    if len(sys.argv) < 2 or sys.argv[1] not in ("read", "writeback", "resolve"):
         print(
             json.dumps(
                 {
                     "ok": False,
                     "failureState": "MCP_UNAVAILABLE",
-                    "message": "usage: agent_bridge.py read|writeback < input.json",
+                    "message": "usage: agent_bridge.py read|writeback|resolve < input.json",
                 }
             )
         )
@@ -289,12 +402,13 @@ def main() -> None:
 
     if command == "read":
         result = asyncio.run(_do_read(payload))
-    else:
+    elif command == "writeback":
         result = asyncio.run(_do_writeback(payload))
+    else:
+        result = asyncio.run(_do_resolve(payload))
 
     print(json.dumps(result, default=str))
     sys.exit(0 if result.get("ok") else 1)
-
 
 if __name__ == "__main__":
     main()

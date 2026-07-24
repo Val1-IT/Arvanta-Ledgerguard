@@ -15,6 +15,13 @@
       "when": 1784823229396,
       "tag": "0001_investigation_runs_fase5",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784893307885,
+      "tag": "0002_remediation_plans_fase6",
+      "breakpoints": true
     }
   ]
 }

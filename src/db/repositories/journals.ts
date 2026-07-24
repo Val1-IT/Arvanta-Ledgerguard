@@ -1,7 +1,7 @@
-import type { Pool } from 'pg';
+import type { Queryable } from '../queryable';
 import { JournalEntryRecordSchema, type JournalEntryRecord } from '../../engine/types';
 
-export async function fetchJournalEntries(pool: Pool): Promise<JournalEntryRecord[]> {
+export async function fetchJournalEntries(pool: Queryable): Promise<JournalEntryRecord[]> {
   const { rows } = await pool.query(
     `select id, source_type as "sourceType", source_id as "sourceId", account_code as "accountCode",
             debit, credit, posted_at as "postedAt"

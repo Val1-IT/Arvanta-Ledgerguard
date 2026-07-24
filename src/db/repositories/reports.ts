@@ -1,7 +1,7 @@
-import type { Pool } from 'pg';
+import type { Queryable } from '../queryable';
 import { BaselineSnapshotSchema, GrossMarginReportRecordSchema, type BaselineSnapshot, type GrossMarginReportRecord } from '../../engine/types';
 
-export async function fetchGrossMarginReports(pool: Pool): Promise<GrossMarginReportRecord[]> {
+export async function fetchGrossMarginReports(pool: Queryable): Promise<GrossMarginReportRecord[]> {
   const { rows } = await pool.query(
     `select id, period, revenue, cost_of_goods_sold as "costOfGoodsSold", gross_profit as "grossProfit",
             gross_margin_percentage as "grossMarginPercentage", generated_at as "generatedAt"
@@ -12,7 +12,7 @@ export async function fetchGrossMarginReports(pool: Pool): Promise<GrossMarginRe
 }
 
 /** The canonical healthy-state reference captured once at seed time (see src/db/seed.ts). */
-export async function fetchBaselineSnapshot(pool: Pool): Promise<BaselineSnapshot> {
+export async function fetchBaselineSnapshot(pool: Queryable): Promise<BaselineSnapshot> {
   const { rows } = await pool.query(
     `select value_json as "valueJson", captured_at as "capturedAt" from baseline_snapshot where key = 'baseline'`
   );

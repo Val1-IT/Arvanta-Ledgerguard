@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  integer,
   numeric,
   pgTable,
   text,
@@ -126,20 +127,47 @@ export const investigationRuns = pgTable('investigation_runs', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 
+// FASE 6 — approval + verified remediation workflow (src/remediation/*).
+// investigationId references investigation_runs.id, where the reconciled
+// engineResultReference/DataHub context from FASE 5 live; incidentId/
+// productId/triggerAsset/requestedBy are denormalized from that same
+// investigation for convenient querying, mirroring investigationRuns' own
+// denormalization pattern above. Deliberately no FK to either
+// investigationRuns or ledgerguardIncidents, for the same TEST-mode
+// flexibility reason investigationRuns itself has none. `version` backs
+// optimistic-concurrency checks on every state transition (see
+// src/remediation/types.ts's ALLOWED_TRANSITIONS). proposedCorrections/
+// verificationExpectations are a snapshot taken at plan-generation time
+// (src/remediation/generate-plan.ts) — a verbatim copy of a real
+// IncidentInvestigationReport's fields, never hand-authored or LLM-authored.
 export const remediationPlans = pgTable('remediation_plans', {
-  id: text('id')
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  incidentId: text('incident_id')
-    .notNull()
-    .references(() => ledgerguardIncidents.id),
-  status: text('status').notNull(),
-  proposedActions: text('proposed_actions'),
-  remediationSql: text('remediation_sql'),
+  id: text('id').primaryKey(),
+  investigationId: text('investigation_id').notNull(),
+  incidentId: text('incident_id').notNull(),
+  productId: text('product_id').notNull(),
+  triggerAsset: text('trigger_asset').notNull(),
+  requestedBy: text('requested_by').notNull(),
+
+  state: text('state').notNull(),
+  version: integer('version').notNull().default(1),
+
+  proposedCorrectionsJson: text('proposed_corrections_json').notNull(),
+  verificationExpectationsJson: text('verification_expectations_json').notNull(),
+
+  approvalAction: text('approval_action'),
   approvedBy: text('approved_by'),
+  approvalNote: text('approval_note'),
   approvedAt: timestamp('approved_at', { withTimezone: true }),
+
+  executionResultJson: text('execution_result_json'),
   executedAt: timestamp('executed_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+
+  verificationJson: text('verification_json'),
+
+  datahubWritebackJson: text('datahub_writeback_json'),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull()
 });
 
 export type ProductRow = typeof products.$inferSelect;
