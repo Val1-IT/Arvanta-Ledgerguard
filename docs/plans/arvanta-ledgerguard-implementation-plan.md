@@ -168,7 +168,14 @@ show the DataHub metadata and write-back as proof.
 - FASE 3A — DataHub bootstrap: datasets, schema, owners, glossary, tags, lineage.
 - FASE 3B — DataHub MCP connectivity proof (read schema, owners, downstream lineage
   via MCP) before continuing.
-- FASE 4 — Deterministic integrity engine + unit tests.
+- FASE 4 — Deterministic integrity engine + unit tests. **Done.** Pure engine in
+  `src/engine/*` (types, decimal safety via decimal.js, conversion/inventory/
+  journal/margin impact, blast radius, financial exposure, 5 quality checks,
+  remediation preview, verify, investigate orchestrator) + read-only repository
+  adapters in `src/db/repositories/*`. 10/10 required unit test cases +
+  integration tests against `ledgerguard-postgres` (PostgreSQL demo milik
+  Arvanta LedgerGuard) + real example artifacts via `npm run example`. See
+  `docs/architecture/financial-integrity-engine.md` for the full design.
 - FASE 5 — Agent investigation via MCP.
 - FASE 6 — Containment, dry-run, approval, execution, rollback, verification,
   write-back.

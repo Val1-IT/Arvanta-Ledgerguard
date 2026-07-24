@@ -1,0 +1,138 @@
+{
+  "incidentType": "UNIT_CONVERSION_MISMATCH",
+  "rootCause": {
+    "asset": "product_units",
+    "field": "conversion_factor",
+    "productId": "prod-cement-40",
+    "unitId": "pu-carton",
+    "unitName": "CARTON",
+    "expectedValue": "12.0000",
+    "actualValue": "10.0000",
+    "delta": "-2.0000"
+  },
+  "financialImpact": {
+    "inventoryValueDelta": "14400000.00",
+    "cogsDelta": "-14400000.00",
+    "grossProfitDelta": "14400000.00",
+    "grossMarginPercentageDelta": "13.3333",
+    "totalExposure": "28800000.00",
+    "currency": "IDR"
+  },
+  "proposedCorrections": [
+    {
+      "sequence": 1,
+      "action": "RESTORE_CONVERSION_FACTOR",
+      "table": "product_units",
+      "recordId": "pu-carton",
+      "field": "conversion_factor",
+      "beforeValue": "10.0000",
+      "afterValue": "12.0000",
+      "financialDelta": null,
+      "rollbackAssumption": "reverts conversion_factor to the value captured in baseline_snapshot at seed time; safe to re-apply the current value if this needs to be undone"
+    },
+    {
+      "sequence": 2,
+      "action": "REGENERATE_INVENTORY_VALUATION",
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "quantity_on_hand",
+      "beforeValue": "960.000",
+      "afterValue": "1440.000",
+      "financialDelta": null,
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 3,
+      "action": "REGENERATE_INVENTORY_VALUATION",
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "average_cost",
+      "beforeValue": "60000.00",
+      "afterValue": "50000.00",
+      "financialDelta": null,
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 4,
+      "action": "REGENERATE_INVENTORY_VALUATION",
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "inventory_value",
+      "beforeValue": "57600000.00",
+      "afterValue": "72000000.00",
+      "financialDelta": "14400000.00",
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 5,
+      "action": "RECONCILE_JOURNAL_ENTRIES",
+      "table": "journal_entries",
+      "recordId": "2026-01",
+      "field": "cost_of_goods_sold_reconciliation",
+      "beforeValue": "72000000.00",
+      "afterValue": "72000000.00",
+      "financialDelta": null,
+      "rollbackAssumption": "journal entries are not modified by this step; it only confirms the recomputed COGS matches the ledger-posted COGS before the margin report is regenerated"
+    },
+    {
+      "sequence": 6,
+      "action": "REGENERATE_GROSS_MARGIN_REPORT",
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "cost_of_goods_sold",
+      "beforeValue": "86400000.00",
+      "afterValue": "72000000.00",
+      "financialDelta": "-14400000.00",
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 7,
+      "action": "REGENERATE_GROSS_MARGIN_REPORT",
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "gross_profit",
+      "beforeValue": "21600000.00",
+      "afterValue": "36000000.00",
+      "financialDelta": "14400000.00",
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 8,
+      "action": "REGENERATE_GROSS_MARGIN_REPORT",
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "gross_margin_percentage",
+      "beforeValue": "20.0000",
+      "afterValue": "33.3333",
+      "financialDelta": null,
+      "rollbackAssumption": "previous value retained above for rollback"
+    }
+  ],
+  "verificationExpectations": [
+    {
+      "checkId": "CONVERSION_FACTOR_POSITIVE",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), CONVERSION_FACTOR_POSITIVE must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "BASE_QUANTITY_CONSISTENCY",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), BASE_QUANTITY_CONSISTENCY must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "INVENTORY_VALUATION_CONSISTENCY",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), INVENTORY_VALUATION_CONSISTENCY must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "JOURNAL_BALANCE",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), JOURNAL_BALANCE must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "GROSS_MARGIN_CONSISTENCY",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), GROSS_MARGIN_CONSISTENCY must evaluate to PASS against the corrected state"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+import type { Pool } from 'pg';
+import { BaselineSnapshotSchema, GrossMarginReportRecordSchema, type BaselineSnapshot, type GrossMarginReportRecord } from '../../engine/types';
+
+export async function fetchGrossMarginReports(pool: Pool): Promise<GrossMarginReportRecord[]> {
+  const { rows } = await pool.query(
+    `select id, period, revenue, cost_of_goods_sold as "costOfGoodsSold", gross_profit as "grossProfit",
+            gross_margin_percentage as "grossMarginPercentage", generated_at as "generatedAt"
+       from gross_margin_report
+      order by period, id`
+  );
+  return rows.map((row) => GrossMarginReportRecordSchema.parse(row));
+}
+
+/** The canonical healthy-state reference captured once at seed time (see src/db/seed.ts). */
+export async function fetchBaselineSnapshot(pool: Pool): Promise<BaselineSnapshot> {
+  const { rows } = await pool.query(`select value_json as "valueJson" from baseline_snapshot where key = 'baseline'`);
+  if (rows.length === 0) {
+    throw new Error("baseline_snapshot row 'baseline' not found — run `npm run db:seed` first");
+  }
+  return BaselineSnapshotSchema.parse(JSON.parse(rows[0].valueJson));
+}

@@ -26,6 +26,7 @@
     "db:setup": "npm run db:up && npm run db:wait && npm run db:migrate && npm run db:seed",
     "db:wait": "tsx src/db/wait.ts",
     "scenario:conversion-error": "tsx demo-data/scenarios/conversion-error.ts",
+    "example": "tsx scripts/generate-example.ts",
     "datahub:up": "node scripts/py.mjs -m datahub.entrypoints docker quickstart",
     "datahub:down": "node scripts/py.mjs -m datahub.entrypoints docker quickstart --stop",
     "datahub:status": "node scripts/py.mjs -m datahub.entrypoints docker check",
@@ -37,6 +38,7 @@
     "test:datahub": "vitest run --config vitest.datahub.config.ts"
   },
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.36.4",
     "lucide-react": "^0.542.0",
     "next": "^15.5.18",

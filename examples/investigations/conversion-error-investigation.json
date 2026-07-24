@@ -1,0 +1,573 @@
+{
+  "incidentType": "UNIT_CONVERSION_MISMATCH",
+  "rootCause": {
+    "asset": "product_units",
+    "field": "conversion_factor",
+    "productId": "prod-cement-40",
+    "unitId": "pu-carton",
+    "unitName": "CARTON",
+    "expectedValue": "12.0000",
+    "actualValue": "10.0000",
+    "delta": "-2.0000"
+  },
+  "affectedRecords": {
+    "inventoryMovements": [
+      "mov-p-0001",
+      "mov-p-0002",
+      "mov-p-0003",
+      "mov-p-0004",
+      "mov-p-0005",
+      "mov-p-0006",
+      "mov-p-0007",
+      "mov-p-0008",
+      "mov-p-0009",
+      "mov-p-0010",
+      "mov-p-0011",
+      "mov-p-0012",
+      "mov-p-0013",
+      "mov-p-0014",
+      "mov-p-0015",
+      "mov-p-0016",
+      "mov-p-0017",
+      "mov-p-0018",
+      "mov-p-0019",
+      "mov-p-0020",
+      "mov-p-0021",
+      "mov-p-0022",
+      "mov-p-0023",
+      "mov-p-0024"
+    ],
+    "inventoryValuations": [
+      "val-cement-40"
+    ],
+    "journalEntries": [
+      "je-s-1-cogs",
+      "je-s-2-cogs",
+      "je-s-3-cogs",
+      "je-s-4-cogs",
+      "je-s-5-cogs",
+      "je-s-6-cogs",
+      "je-s-7-cogs",
+      "je-s-8-cogs",
+      "je-s-9-cogs",
+      "je-s-10-cogs",
+      "je-s-11-cogs",
+      "je-s-12-cogs",
+      "je-s-13-cogs",
+      "je-s-14-cogs",
+      "je-s-15-cogs",
+      "je-s-16-cogs",
+      "je-s-17-cogs",
+      "je-s-18-cogs",
+      "je-s-19-cogs",
+      "je-s-20-cogs",
+      "je-s-21-cogs",
+      "je-s-22-cogs",
+      "je-s-23-cogs",
+      "je-s-24-cogs",
+      "je-s-25-cogs",
+      "je-s-26-cogs",
+      "je-s-27-cogs",
+      "je-s-28-cogs",
+      "je-s-29-cogs",
+      "je-s-30-cogs",
+      "je-s-31-cogs",
+      "je-s-32-cogs",
+      "je-s-33-cogs",
+      "je-s-34-cogs",
+      "je-s-35-cogs",
+      "je-s-36-cogs"
+    ],
+    "reports": [
+      "gmr-2026-01"
+    ]
+  },
+  "blastRadius": {
+    "affectedAssetCount": 5,
+    "affectedRecordCount": 63,
+    "assets": [
+      {
+        "asset": "product_units",
+        "role": "root_cause",
+        "recordCount": 1
+      },
+      {
+        "asset": "inventory_movements",
+        "role": "evidence_only",
+        "recordCount": 24
+      },
+      {
+        "asset": "inventory_valuation",
+        "role": "requires_correction",
+        "recordCount": 1
+      },
+      {
+        "asset": "journal_entries",
+        "role": "evidence_only",
+        "recordCount": 36
+      },
+      {
+        "asset": "gross_margin_report",
+        "role": "requires_correction",
+        "recordCount": 1
+      }
+    ]
+  },
+  "financialImpact": {
+    "inventoryValueDelta": "14400000.00",
+    "cogsDelta": "-14400000.00",
+    "grossProfitDelta": "14400000.00",
+    "grossMarginPercentageDelta": "13.3333",
+    "totalExposure": "28800000.00",
+    "currency": "IDR"
+  },
+  "evidence": [
+    {
+      "table": "product_units",
+      "recordId": "pu-carton",
+      "field": "conversion_factor",
+      "expectedValue": "12.0000",
+      "actualValue": "10.0000",
+      "delta": "-2.0000",
+      "reason": "conversion_factor for unit CARTON diverged from the healthy baseline captured in baseline_snapshot"
+    },
+    {
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "inventory_value",
+      "expectedValue": "72000000.00",
+      "actualValue": "57600000.00",
+      "delta": "14400000.00",
+      "reason": "inventory_value recomputed from movement history using the baseline conversion_factor does not match the stored value"
+    },
+    {
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "quantity_on_hand",
+      "expectedValue": "1440.000",
+      "actualValue": "960.000",
+      "delta": "480.000",
+      "reason": "quantity_on_hand recomputed from movement history using the baseline conversion_factor does not match the stored value"
+    },
+    {
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "cost_of_goods_sold",
+      "expectedValue": "72000000.00",
+      "actualValue": "86400000.00",
+      "delta": "-14400000.00",
+      "reason": "cost_of_goods_sold recomputed from correct inventory valuation does not match the stored value"
+    }
+  ],
+  "qualityChecks": [
+    {
+      "checkId": "CONVERSION_FACTOR_POSITIVE",
+      "status": "PASS",
+      "severity": "info",
+      "expected": "all product_units.conversion_factor > 0",
+      "actual": "all product_units.conversion_factor > 0",
+      "affectedRecordIds": [],
+      "evidence": [],
+      "remediationHint": "no action required"
+    },
+    {
+      "checkId": "BASE_QUANTITY_CONSISTENCY",
+      "status": "FAIL",
+      "severity": "critical",
+      "expected": "base_quantity = quantity * current conversion_factor",
+      "actual": "24 movement(s) inconsistent with the current conversion_factor",
+      "affectedRecordIds": [
+        "mov-p-0001",
+        "mov-p-0002",
+        "mov-p-0003",
+        "mov-p-0004",
+        "mov-p-0005",
+        "mov-p-0006",
+        "mov-p-0007",
+        "mov-p-0008",
+        "mov-p-0009",
+        "mov-p-0010",
+        "mov-p-0011",
+        "mov-p-0012",
+        "mov-p-0013",
+        "mov-p-0014",
+        "mov-p-0015",
+        "mov-p-0016",
+        "mov-p-0017",
+        "mov-p-0018",
+        "mov-p-0019",
+        "mov-p-0020",
+        "mov-p-0021",
+        "mov-p-0022",
+        "mov-p-0023",
+        "mov-p-0024"
+      ],
+      "evidence": [
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0001",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0002",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0003",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0004",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0005",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0006",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0007",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0008",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0009",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0010",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0011",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0012",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0013",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0014",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0015",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0016",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0017",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0018",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0019",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0020",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0021",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0022",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0023",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        },
+        {
+          "table": "inventory_movements",
+          "recordId": "mov-p-0024",
+          "field": "base_quantity",
+          "expectedValue": "100.000",
+          "actualValue": "120.000",
+          "delta": "-20.000",
+          "reason": "base_quantity does not equal quantity (10.000) times the current conversion_factor (10.0000) for unit CARTON"
+        }
+      ],
+      "remediationHint": "the current conversion_factor likely changed after these movements were posted; restore the factor that was in effect when they were recorded, not the movements themselves"
+    },
+    {
+      "checkId": "INVENTORY_VALUATION_CONSISTENCY",
+      "status": "PASS",
+      "severity": "info",
+      "expected": "inventory_value = quantity_on_hand * average_cost",
+      "actual": "inventory_value = quantity_on_hand * average_cost",
+      "affectedRecordIds": [],
+      "evidence": [],
+      "remediationHint": "no action required"
+    },
+    {
+      "checkId": "JOURNAL_BALANCE",
+      "status": "PASS",
+      "severity": "info",
+      "expected": "total debit = total credit",
+      "actual": "debit=324000000.00, credit=324000000.00",
+      "affectedRecordIds": [],
+      "evidence": [],
+      "remediationHint": "no action required"
+    },
+    {
+      "checkId": "GROSS_MARGIN_CONSISTENCY",
+      "status": "PASS",
+      "severity": "info",
+      "expected": "gross_profit = revenue - cost_of_goods_sold; gross_margin_percentage = gross_profit / revenue * 100",
+      "actual": "gross_profit = revenue - cost_of_goods_sold; gross_margin_percentage = gross_profit / revenue * 100",
+      "affectedRecordIds": [],
+      "evidence": [],
+      "remediationHint": "no action required"
+    }
+  ],
+  "proposedCorrections": [
+    {
+      "sequence": 1,
+      "action": "RESTORE_CONVERSION_FACTOR",
+      "table": "product_units",
+      "recordId": "pu-carton",
+      "field": "conversion_factor",
+      "beforeValue": "10.0000",
+      "afterValue": "12.0000",
+      "financialDelta": null,
+      "rollbackAssumption": "reverts conversion_factor to the value captured in baseline_snapshot at seed time; safe to re-apply the current value if this needs to be undone"
+    },
+    {
+      "sequence": 2,
+      "action": "REGENERATE_INVENTORY_VALUATION",
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "quantity_on_hand",
+      "beforeValue": "960.000",
+      "afterValue": "1440.000",
+      "financialDelta": null,
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 3,
+      "action": "REGENERATE_INVENTORY_VALUATION",
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "average_cost",
+      "beforeValue": "60000.00",
+      "afterValue": "50000.00",
+      "financialDelta": null,
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 4,
+      "action": "REGENERATE_INVENTORY_VALUATION",
+      "table": "inventory_valuation",
+      "recordId": "val-cement-40",
+      "field": "inventory_value",
+      "beforeValue": "57600000.00",
+      "afterValue": "72000000.00",
+      "financialDelta": "14400000.00",
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 5,
+      "action": "RECONCILE_JOURNAL_ENTRIES",
+      "table": "journal_entries",
+      "recordId": "2026-01",
+      "field": "cost_of_goods_sold_reconciliation",
+      "beforeValue": "72000000.00",
+      "afterValue": "72000000.00",
+      "financialDelta": null,
+      "rollbackAssumption": "journal entries are not modified by this step; it only confirms the recomputed COGS matches the ledger-posted COGS before the margin report is regenerated"
+    },
+    {
+      "sequence": 6,
+      "action": "REGENERATE_GROSS_MARGIN_REPORT",
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "cost_of_goods_sold",
+      "beforeValue": "86400000.00",
+      "afterValue": "72000000.00",
+      "financialDelta": "-14400000.00",
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 7,
+      "action": "REGENERATE_GROSS_MARGIN_REPORT",
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "gross_profit",
+      "beforeValue": "21600000.00",
+      "afterValue": "36000000.00",
+      "financialDelta": "14400000.00",
+      "rollbackAssumption": "previous value retained above for rollback"
+    },
+    {
+      "sequence": 8,
+      "action": "REGENERATE_GROSS_MARGIN_REPORT",
+      "table": "gross_margin_report",
+      "recordId": "gmr-2026-01",
+      "field": "gross_margin_percentage",
+      "beforeValue": "20.0000",
+      "afterValue": "33.3333",
+      "financialDelta": null,
+      "rollbackAssumption": "previous value retained above for rollback"
+    }
+  ],
+  "verificationExpectations": [
+    {
+      "checkId": "CONVERSION_FACTOR_POSITIVE",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), CONVERSION_FACTOR_POSITIVE must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "BASE_QUANTITY_CONSISTENCY",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), BASE_QUANTITY_CONSISTENCY must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "INVENTORY_VALUATION_CONSISTENCY",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), INVENTORY_VALUATION_CONSISTENCY must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "JOURNAL_BALANCE",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), JOURNAL_BALANCE must evaluate to PASS against the corrected state"
+    },
+    {
+      "checkId": "GROSS_MARGIN_CONSISTENCY",
+      "expectedStatus": "PASS",
+      "description": "after remediation is executed (FASE 6), GROSS_MARGIN_CONSISTENCY must evaluate to PASS against the corrected state"
+    }
+  ]
+}
