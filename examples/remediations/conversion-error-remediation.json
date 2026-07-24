@@ -1,5 +1,6 @@
 {
   "incidentType": "UNIT_CONVERSION_MISMATCH",
+  "overallStatus": "CRITICAL",
   "rootCause": {
     "asset": "product_units",
     "field": "conversion_factor",
@@ -8,15 +9,292 @@
     "unitName": "CARTON",
     "expectedValue": "12.0000",
     "actualValue": "10.0000",
-    "delta": "-2.0000"
+    "delta": "-2.0000",
+    "expectedValueSource": {
+      "type": "baseline_snapshot",
+      "recordId": "baseline",
+      "capturedAt": "2026-01-01T00:00:00.000Z",
+      "evidenceReference": "baseline_snapshot.conversionFactor.CARTON"
+    }
   },
   "financialImpact": {
     "inventoryValueDelta": "14400000.00",
     "cogsDelta": "-14400000.00",
     "grossProfitDelta": "14400000.00",
     "grossMarginPercentageDelta": "13.3333",
-    "totalExposure": "28800000.00",
+    "onHandAffectedUnits": "1440.000",
+    "soldAffectedUnits": "1440.000",
+    "inventoryExposureComponent": "14400000.00",
+    "realizedCogsExposureComponent": "14400000.00",
+    "populationsProvenDisjoint": true,
+    "reconciliationInvariant": "onHandAffectedUnits (1440.000) + soldAffectedUnits (1440.000) = totalBaseIn (2880.000); quantityOnHand = totalBaseIn - totalBaseOut is a structural accounting identity, so a base unit is either on hand or sold, never both — the two exposure components are proven disjoint",
+    "exposureMethod": "DISJOINT_POPULATION_SUM",
+    "primaryExposure": "28800000.00",
+    "grossStatementFootprint": "43200000.00",
     "currency": "IDR"
+  },
+  "recordImpact": {
+    "evidenceRecords": [
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0001"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0002"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0003"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0004"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0005"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0006"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0007"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0008"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0009"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0010"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0011"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0012"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0013"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0014"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0015"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0016"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0017"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0018"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0019"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0020"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0021"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0022"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0023"
+      },
+      {
+        "table": "inventory_movements",
+        "recordId": "mov-p-0024"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-1-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-2-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-3-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-4-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-5-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-6-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-7-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-8-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-9-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-10-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-11-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-12-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-13-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-14-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-15-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-16-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-17-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-18-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-19-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-20-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-21-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-22-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-23-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-24-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-25-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-26-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-27-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-28-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-29-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-30-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-31-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-32-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-33-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-34-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-35-cogs"
+      },
+      {
+        "table": "journal_entries",
+        "recordId": "je-s-36-cogs"
+      }
+    ],
+    "correctionTargets": [
+      {
+        "table": "product_units",
+        "recordId": "pu-carton"
+      },
+      {
+        "table": "inventory_valuation",
+        "recordId": "val-cement-40"
+      },
+      {
+        "table": "gross_margin_report",
+        "recordId": "gmr-2026-01"
+      }
+    ],
+    "downstreamAffectedRecords": [],
+    "evidenceRecordCount": 60,
+    "correctionTargetCount": 3,
+    "downstreamAffectedRecordCount": 0,
+    "uniqueRecordCount": 63
   },
   "proposedCorrections": [
     {

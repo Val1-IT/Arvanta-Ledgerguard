@@ -20,7 +20,8 @@ describe('rounding edge case (case 8)', () => {
       conversionFactor: { CARTON: 3 },
       movements: { totalBaseIn: 3, totalBaseOut: 0, quantityOnHand: 3 },
       valuation: { averageCost: 100 / 3, inventoryValue: 100, quantityOnHand: 3 },
-      margin: { revenue: 0, costOfGoodsSold: 0, grossProfit: 0, grossMarginPercentage: 0 }
+      margin: { revenue: 0, costOfGoodsSold: 0, grossProfit: 0, grossMarginPercentage: 0 },
+      capturedAt: new Date('2026-01-01T00:00:00.000Z')
     };
 
     const movement: InventoryMovementRecord = {

@@ -39,10 +39,15 @@ async function main(): Promise<void> {
     // The remediation artifact is the safe-remediation-input slice of the same
     // engine report (FASE 4 only previews corrections; FASE 6 executes them
     // after human approval) — pulled from the identical run, not fabricated.
+    // recordImpact is included so remediation consumers can see which records
+    // are correctionTargets (the only ones proposedCorrections may mutate) as
+    // distinct from evidenceRecords/downstreamAffectedRecords, which are not.
     const remediation = {
       incidentType: report.incidentType,
+      overallStatus: report.overallStatus,
       rootCause: report.rootCause,
       financialImpact: report.financialImpact,
+      recordImpact: report.recordImpact,
       proposedCorrections: report.proposedCorrections,
       verificationExpectations: report.verificationExpectations
     };

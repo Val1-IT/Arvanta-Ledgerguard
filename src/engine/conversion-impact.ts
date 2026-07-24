@@ -49,8 +49,14 @@ export function detectConversionFactorChanges(
  * incident scenarios yet) — when more than one unit has changed, the one
  * with the largest absolute factor delta is reported as the root cause and
  * the rest are still visible in the returned `changes` array for evidence.
+ *
+ * `expectedValueSource` answers "why is `expectedValue` trusted?" — it is
+ * never a bare asserted number. MVP provenance is the baseline_snapshot row
+ * itself: its `key` column ('baseline') as recordId, its `captured_at`
+ * column as capturedAt, and a pointer into the JSON payload's
+ * conversionFactor map as the evidence reference.
  */
-export function selectRootCause(changes: ConversionFactorChange[]): RootCause | null {
+export function selectRootCause(changes: ConversionFactorChange[], baseline: BaselineSnapshot): RootCause | null {
   if (changes.length === 0) return null;
 
   const primary = changes.reduce((biggest, candidate) =>
@@ -65,6 +71,12 @@ export function selectRootCause(changes: ConversionFactorChange[]): RootCause | 
     unitName: primary.unitName,
     expectedValue: primary.expectedValue,
     actualValue: primary.actualValue,
-    delta: primary.delta
+    delta: primary.delta,
+    expectedValueSource: {
+      type: 'baseline_snapshot',
+      recordId: 'baseline',
+      capturedAt: baseline.capturedAt,
+      evidenceReference: `baseline_snapshot.conversionFactor.${primary.unitName}`
+    }
   };
 }

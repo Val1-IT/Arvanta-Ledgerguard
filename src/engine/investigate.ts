@@ -9,11 +9,20 @@ import {
 import { compareMarginReports, type MarginComparison } from './margin-impact';
 import { summarizeJournalCogs } from './journal-impact';
 import { buildBlastRadius } from './blast-radius';
+import { buildRecordImpact, ZERO_RECORD_IMPACT } from './record-impact';
 import { buildFinancialImpact, ZERO_FINANCIAL_IMPACT } from './financial-exposure';
 import { ALL_QUALITY_CHECKS } from './quality-checks';
 import { buildRemediationPreview } from './remediation-preview';
 import { formatMoney, formatQuantity, ZERO } from './decimal';
-import type { EvidenceItem, IncidentInvestigationReport, InventoryMovementRecord, InvestigationInput, RootCause } from './types';
+import type {
+  EvidenceItem,
+  IncidentInvestigationReport,
+  InventoryMovementRecord,
+  InvestigationInput,
+  OverallHealthStatus,
+  QualityCheckResult,
+  RootCause
+} from './types';
 
 // ---------------------------------------------------------------------------
 // The pure orchestrator. Takes an already-fetched InvestigationInput (see
@@ -81,9 +90,27 @@ function buildEvidence(
   return evidence;
 }
 
+// ---------------------------------------------------------------------------
+// overallStatus is the system's aggregate health and is intentionally
+// independent of incidentType (see types.ts comment on OverallHealthStatus):
+// a detected root-cause incident always means CRITICAL; absent a root cause,
+// health is instead derived from the worst quality-check severity that is
+// currently FAILing, so a pre-existing structural problem (e.g. an
+// unbalanced journal with no conversion-factor incident) still degrades or
+// critically fails overallStatus rather than being reported HEALTHY.
+// ---------------------------------------------------------------------------
+function deriveOverallStatus(rootCause: RootCause | null, qualityChecks: QualityCheckResult[]): OverallHealthStatus {
+  if (rootCause) return 'CRITICAL';
+
+  const failing = qualityChecks.filter((c) => c.status === 'FAIL');
+  if (failing.some((c) => c.severity === 'critical')) return 'CRITICAL';
+  if (failing.some((c) => c.severity === 'warning')) return 'DEGRADED';
+  return 'HEALTHY';
+}
+
 export function investigate(input: InvestigationInput): IncidentInvestigationReport {
   const changes = detectConversionFactorChanges(input.productUnits, input.baseline);
-  const rootCause = selectRootCause(changes);
+  const rootCause = selectRootCause(changes, input.baseline);
   const changedUnitNames = new Set(changes.map((c) => c.unitName));
 
   const factors = expectedFactorMap(input.baseline);
@@ -122,8 +149,25 @@ export function investigate(input: InvestigationInput): IncidentInvestigationRep
     .filter((m) => m.mismatch)
     .reduce((sum, m) => sum.plus(m.grossMarginPercentageDelta), ZERO);
 
+  // Disjoint-population proof inputs (see financial-exposure.ts): aggregated
+  // across every product whose correct valuation was recomputed, since
+  // quantityOnHand = totalBaseIn - totalBaseOut holds per product and the
+  // sum of a structural identity across products is itself the same
+  // identity.
+  const onHandAffectedUnits = correctValuations.reduce((sum, v) => sum.plus(v.quantityOnHand), ZERO);
+  const soldAffectedUnits = correctValuations.reduce((sum, v) => sum.plus(v.totalBaseOut), ZERO);
+  const totalBaseInAffected = correctValuations.reduce((sum, v) => sum.plus(v.totalBaseIn), ZERO);
+
   const financialImpact = rootCause
-    ? buildFinancialImpact(inventoryValueDelta, cogsDelta, grossProfitDelta, grossMarginPercentageDelta)
+    ? buildFinancialImpact({
+        inventoryValueDelta,
+        cogsDelta,
+        grossProfitDelta,
+        grossMarginPercentageDelta,
+        onHandAffectedUnits,
+        soldAffectedUnits,
+        totalBaseInAffected
+      })
     : ZERO_FINANCIAL_IMPACT;
 
   const evidence = buildEvidence(rootCause, valuationComparisons, marginComparisons);
@@ -138,11 +182,21 @@ export function investigate(input: InvestigationInput): IncidentInvestigationRep
       })
     : { proposedCorrections: [], verificationExpectations: [] };
 
+  const recordImpact = rootCause
+    ? buildRecordImpact({
+        affectedMovementIds,
+        affectedJournalEntryIds,
+        proposedCorrections: remediation.proposedCorrections
+      })
+    : ZERO_RECORD_IMPACT;
+
   return {
-    incidentType: rootCause ? 'UNIT_CONVERSION_MISMATCH' : 'HEALTHY',
+    incidentType: rootCause ? 'UNIT_CONVERSION_MISMATCH' : null,
+    overallStatus: deriveOverallStatus(rootCause, qualityChecks),
     rootCause,
     affectedRecords,
     blastRadius,
+    recordImpact,
     financialImpact,
     evidence,
     qualityChecks,

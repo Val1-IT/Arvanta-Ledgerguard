@@ -78,6 +78,9 @@ export type GrossMarginReportRecord = z.infer<typeof GrossMarginReportRecordSche
 // The JSON payload captured once at seed time into baseline_snapshot.value_json.
 // conversionFactor is keyed by unit name; this demo has a single product, so it
 // is not further keyed by productId (documented limitation, see architecture doc).
+// capturedAt comes from the baseline_snapshot.captured_at column (not the JSON
+// blob itself) — it is the provenance timestamp for every "expected" value the
+// engine cites as the reference point once live data has diverged from it.
 export const BaselineSnapshotSchema = z.object({
   conversionFactor: z.record(z.string(), z.number()),
   movements: z.object({
@@ -95,7 +98,8 @@ export const BaselineSnapshotSchema = z.object({
     costOfGoodsSold: z.number(),
     grossProfit: z.number(),
     grossMarginPercentage: z.number()
-  })
+  }),
+  capturedAt: isoDate
 });
 export type BaselineSnapshot = z.infer<typeof BaselineSnapshotSchema>;
 
@@ -138,6 +142,19 @@ export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
 // Root cause
 // ---------------------------------------------------------------------------
 
+// Provenance for `expectedValue`: where it came from, and as-of when it was
+// true, so the engine can explain *why* the expected value is trusted rather
+// than asserting it as a bare number. MVP sources this from baseline_snapshot
+// only (see docs/architecture/financial-integrity-engine.md); a future
+// multi-version product_units history could add a 'product_unit_record' type.
+export const ExpectedValueSourceSchema = z.object({
+  type: z.literal('baseline_snapshot'),
+  recordId: z.string(),
+  capturedAt: isoDate,
+  evidenceReference: z.string()
+});
+export type ExpectedValueSource = z.infer<typeof ExpectedValueSourceSchema>;
+
 export const RootCauseSchema = z.object({
   asset: z.literal('product_units'),
   field: z.literal('conversion_factor'),
@@ -146,7 +163,8 @@ export const RootCauseSchema = z.object({
   unitName: z.string(),
   expectedValue: z.string(),
   actualValue: z.string(),
-  delta: z.string()
+  delta: z.string(),
+  expectedValueSource: ExpectedValueSourceSchema
 });
 export type RootCause = z.infer<typeof RootCauseSchema>;
 
@@ -180,16 +198,66 @@ export const BlastRadiusSchema = z.object({
 export type BlastRadius = z.infer<typeof BlastRadiusSchema>;
 
 // ---------------------------------------------------------------------------
+// Record-impact classification. Distinct from blastRadius (which counts at
+// asset/table granularity): this classifies individual records into what
+// happens to them, so a UI or remediation step never has to guess whether a
+// record is proof, a mutation target, or neither. See
+// src/engine/record-impact.ts and docs/architecture/financial-integrity-engine.md.
+// ---------------------------------------------------------------------------
+
+export const RecordRefSchema = z.object({
+  table: z.string(),
+  recordId: z.string()
+});
+export type RecordRef = z.infer<typeof RecordRefSchema>;
+
+export const RecordImpactSchema = z.object({
+  evidenceRecords: z.array(RecordRefSchema),
+  correctionTargets: z.array(RecordRefSchema),
+  downstreamAffectedRecords: z.array(RecordRefSchema),
+  evidenceRecordCount: z.number().int().nonnegative(),
+  correctionTargetCount: z.number().int().nonnegative(),
+  downstreamAffectedRecordCount: z.number().int().nonnegative(),
+  uniqueRecordCount: z.number().int().nonnegative()
+});
+export type RecordImpact = z.infer<typeof RecordImpactSchema>;
+
+// ---------------------------------------------------------------------------
 // Financial impact. See src/engine/financial-exposure.ts for the formula and
 // docs/architecture/financial-integrity-engine.md for the full rationale.
+//
+// primaryExposure is the single dollar figure a business would report as "how
+// much is wrong" — never a sum of statement lines that describe the same
+// misstatement twice. inventoryValueDelta (balance-sheet, on-hand units) and
+// cogsDelta (income-statement, already-sold units) are proven disjoint by the
+// reconciliationInvariant (on-hand + sold = correct total base-in), so they
+// are genuinely two distinct misstatements and primaryExposure sums their
+// absolute components. grossProfitDelta is NOT included anywhere in
+// primaryExposure: it is mathematically -cogsDelta by construction (revenue is
+// never touched by this incident type), so it is a restatement of the same
+// number, not independent exposure. grossStatementFootprint is the raw sum of
+// every statement line's absolute movement (including grossProfitDelta) —
+// useful for "how many statement lines moved and by how much in total"
+// transparency, but must never be read as "the" exposure figure.
 // ---------------------------------------------------------------------------
+
+export const ExposureMethodSchema = z.enum(['DISJOINT_POPULATION_SUM', 'MAX_STATEMENT_LINE']);
+export type ExposureMethod = z.infer<typeof ExposureMethodSchema>;
 
 export const FinancialImpactSchema = z.object({
   inventoryValueDelta: z.string(),
   cogsDelta: z.string(),
   grossProfitDelta: z.string(),
   grossMarginPercentageDelta: z.string(),
-  totalExposure: z.string(),
+  onHandAffectedUnits: z.string(),
+  soldAffectedUnits: z.string(),
+  inventoryExposureComponent: z.string(),
+  realizedCogsExposureComponent: z.string(),
+  populationsProvenDisjoint: z.boolean(),
+  reconciliationInvariant: z.string(),
+  exposureMethod: ExposureMethodSchema,
+  primaryExposure: z.string(),
+  grossStatementFootprint: z.string(),
   currency: z.literal('IDR')
 });
 export type FinancialImpact = z.infer<typeof FinancialImpactSchema>;
@@ -264,14 +332,30 @@ export type VerificationResult = z.infer<typeof VerificationResultSchema>;
 // Full report
 // ---------------------------------------------------------------------------
 
-export const IncidentTypeSchema = z.enum(['HEALTHY', 'UNIT_CONVERSION_MISMATCH']);
+// incidentType names a *specific detected incident category*, or null when no
+// incident was detected — it is never used to say "everything is fine"
+// (that is overallStatus's job). Today there is exactly one incident category;
+// more will be added to this enum as new detectors are built.
+export const IncidentTypeSchema = z.enum(['UNIT_CONVERSION_MISMATCH']).nullable();
 export type IncidentType = z.infer<typeof IncidentTypeSchema>;
+
+// overallStatus is the system's aggregate health, derived from qualityChecks
+// severities and independent of whether a *named* incidentType was detected —
+// a pre-existing structural problem (e.g. an unbalanced journal with no
+// conversion-factor incident) can degrade or critically fail overallStatus
+// while incidentType stays null. Do not confuse this with
+// VerificationResult.overallStatus (src/engine/verify.ts), which is an
+// unrelated PASS/FAIL result for post-remediation re-checks.
+export const OverallHealthStatusSchema = z.enum(['HEALTHY', 'DEGRADED', 'CRITICAL']);
+export type OverallHealthStatus = z.infer<typeof OverallHealthStatusSchema>;
 
 export const IncidentInvestigationReportSchema = z.object({
   incidentType: IncidentTypeSchema,
+  overallStatus: OverallHealthStatusSchema,
   rootCause: RootCauseSchema.nullable(),
   affectedRecords: AffectedRecordsSchema,
   blastRadius: BlastRadiusSchema,
+  recordImpact: RecordImpactSchema,
   financialImpact: FinancialImpactSchema,
   evidence: z.array(EvidenceItemSchema),
   qualityChecks: z.array(QualityCheckResultSchema),

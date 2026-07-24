@@ -18,7 +18,8 @@ export {
 export { checkJournalBalance, summarizeJournalCogs, type JournalBalanceResult, type JournalCogsSummary } from './journal-impact';
 export { compareMarginReports, formatMarginComparison, type MarginComparison } from './margin-impact';
 export { buildBlastRadius, type BlastRadiusInput } from './blast-radius';
-export { buildFinancialImpact, ZERO_FINANCIAL_IMPACT } from './financial-exposure';
+export { buildRecordImpact, ZERO_RECORD_IMPACT, type RecordImpactInput } from './record-impact';
+export { buildFinancialImpact, ZERO_FINANCIAL_IMPACT, type FinancialImpactInputs } from './financial-exposure';
 export {
   ConversionFactorPositiveCheck,
   BaseQuantityConsistencyCheck,

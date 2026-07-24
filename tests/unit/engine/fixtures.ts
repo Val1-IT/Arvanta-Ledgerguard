@@ -198,7 +198,8 @@ export function buildHealthyFixture(): HealthyFixture {
       costOfGoodsSold: totalCogs,
       grossProfit,
       grossMarginPercentage: Number(pct(grossMarginPct))
-    }
+    },
+    capturedAt: BASE_DATE
   };
 
   return { product, productUnits, movements, valuation, journalEntries, marginReport, baseline };

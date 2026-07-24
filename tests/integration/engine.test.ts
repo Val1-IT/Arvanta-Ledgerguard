@@ -56,10 +56,13 @@ describe('financial integrity engine against real Postgres', () => {
     const input = await loadInvestigationInput(pool);
     const report = investigate(input);
 
-    expect(report.incidentType).toBe('HEALTHY');
+    expect(report.incidentType).toBeNull();
+    expect(report.overallStatus).toBe('HEALTHY');
     expect(report.rootCause).toBeNull();
-    expect(report.financialImpact.totalExposure).toBe('0.00');
+    expect(report.financialImpact.primaryExposure).toBe('0.00');
+    expect(report.financialImpact.grossStatementFootprint).toBe('0.00');
     expect(report.proposedCorrections).toEqual([]);
+    expect(report.recordImpact.uniqueRecordCount).toBe(0);
     for (const check of report.qualityChecks) {
       expect(check.status).toBe('PASS');
     }
@@ -73,13 +76,19 @@ describe('financial integrity engine against real Postgres', () => {
     const report = investigate(input);
 
     expect(report.incidentType).toBe('UNIT_CONVERSION_MISMATCH');
+    expect(report.overallStatus).toBe('CRITICAL');
     expect(report.rootCause).toMatchObject({
       asset: 'product_units',
       field: 'conversion_factor',
       unitName: 'CARTON',
       expectedValue: '12.0000',
       actualValue: '10.0000',
-      delta: '-2.0000'
+      delta: '-2.0000',
+      expectedValueSource: {
+        type: 'baseline_snapshot',
+        recordId: 'baseline',
+        evidenceReference: 'baseline_snapshot.conversionFactor.CARTON'
+      }
     });
 
     // Cross-checked against tests/integration/db.test.ts's raw-SQL assertions
@@ -92,7 +101,16 @@ describe('financial integrity engine against real Postgres', () => {
 
     expect(report.financialImpact.inventoryValueDelta).toBe('14400000.00');
     expect(report.financialImpact.cogsDelta).toBe('-14400000.00');
-    expect(report.financialImpact.totalExposure).toBe('28800000.00');
+    // primaryExposure sums the two proven-disjoint components; it is not the
+    // raw sum of every statement line (see grossStatementFootprint below).
+    expect(report.financialImpact.populationsProvenDisjoint).toBe(true);
+    expect(report.financialImpact.exposureMethod).toBe('DISJOINT_POPULATION_SUM');
+    expect(report.financialImpact.primaryExposure).toBe('28800000.00');
+    expect(report.financialImpact.grossStatementFootprint).toBe('43200000.00');
+
+    expect(report.recordImpact.evidenceRecordCount).toBe(60);
+    expect(report.recordImpact.correctionTargetCount).toBe(3);
+    expect(report.recordImpact.uniqueRecordCount).toBe(report.blastRadius.affectedRecordCount);
 
     expect(report.proposedCorrections[0]).toMatchObject({
       action: 'RESTORE_CONVERSION_FACTOR',
@@ -135,7 +153,8 @@ describe('financial integrity engine against real Postgres', () => {
     const input = await loadInvestigationInput(pool);
     const report = investigate(input);
 
-    expect(report.incidentType).toBe('HEALTHY');
-    expect(report.financialImpact.totalExposure).toBe('0.00');
+    expect(report.incidentType).toBeNull();
+    expect(report.overallStatus).toBe('HEALTHY');
+    expect(report.financialImpact.primaryExposure).toBe('0.00');
   });
 });

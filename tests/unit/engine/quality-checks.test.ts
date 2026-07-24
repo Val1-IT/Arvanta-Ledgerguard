@@ -24,7 +24,7 @@ describe('ConversionFactorPositiveCheck — zero factor (case 4)', () => {
     expect(() => investigate(input)).not.toThrow();
     const report = investigate(input);
     expect(report.rootCause).not.toBeNull();
-    expect(Number.isFinite(Number(report.financialImpact.totalExposure))).toBe(true);
+    expect(Number.isFinite(Number(report.financialImpact.primaryExposure))).toBe(true);
 
     const restoreCorrection = report.proposedCorrections.find((c) => c.action === 'RESTORE_CONVERSION_FACTOR');
     expect(restoreCorrection).toMatchObject({ beforeValue: '0.0000', afterValue: '12.0000' });
@@ -65,8 +65,12 @@ describe('JournalBalanceCheck — pre-existing imbalance independent of the inci
     expect(journalResult.severity).toBe('critical');
 
     const report = investigate(input);
-    expect(report.incidentType).toBe('HEALTHY'); // no conversion-factor change was introduced
+    expect(report.incidentType).toBeNull(); // no conversion-factor change was introduced
     expect(report.rootCause).toBeNull();
+    // A pre-existing structural problem still degrades overall health even
+    // though no *named* incident was detected — JournalBalanceCheck's
+    // severity is 'critical', so overallStatus must reflect that.
+    expect(report.overallStatus).toBe('CRITICAL');
 
     const journalCheckInReport = report.qualityChecks.find((c) => c.checkId === 'JOURNAL_BALANCE');
     expect(journalCheckInReport?.status).toBe('FAIL');

@@ -13,9 +13,13 @@ export async function fetchGrossMarginReports(pool: Pool): Promise<GrossMarginRe
 
 /** The canonical healthy-state reference captured once at seed time (see src/db/seed.ts). */
 export async function fetchBaselineSnapshot(pool: Pool): Promise<BaselineSnapshot> {
-  const { rows } = await pool.query(`select value_json as "valueJson" from baseline_snapshot where key = 'baseline'`);
+  const { rows } = await pool.query(
+    `select value_json as "valueJson", captured_at as "capturedAt" from baseline_snapshot where key = 'baseline'`
+  );
   if (rows.length === 0) {
     throw new Error("baseline_snapshot row 'baseline' not found — run `npm run db:seed` first");
   }
-  return BaselineSnapshotSchema.parse(JSON.parse(rows[0].valueJson));
+  // capturedAt lives in its own DB column, not inside the JSON blob (see
+  // src/db/seed.ts) — merge it in before validating against the schema.
+  return BaselineSnapshotSchema.parse({ ...JSON.parse(rows[0].valueJson), capturedAt: rows[0].capturedAt });
 }

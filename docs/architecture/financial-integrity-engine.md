@@ -152,37 +152,87 @@ this separation — a structural bookkeeping bug should never be misreported
 as "caused by" an unrelated conversion-factor incident just because both
 happened to be found in the same investigation run.
 
-## 7. Financial exposure formula
+## 7. Financial exposure: primary exposure vs. gross statement footprint (FASE 4.1)
+
+FASE 4 originally reported a single `totalExposure = abs(inventoryValueDelta)
++ abs(cogsDelta)`. That formula was audited in FASE 4.1 and found to risk
+double-counting: for the conversion-error scenario,
+`inventoryValueDelta` (+14.400.000), `cogsDelta` (−14.400.000), and
+`grossProfitDelta` (+14.400.000) are three statement-line *representations of
+the same single accounting misstatement* — a batch of CARTON units was
+recomputed with the wrong conversion factor, and that one error shows up on
+the balance sheet (inventory), the income statement (COGS), and the derived
+margin figure (gross profit) simultaneously. Summing any two of them without
+proof that they describe non-overlapping unit populations overstates the
+real exposure.
+
+`src/engine/financial-exposure.ts`'s `buildFinancialImpact()` replaces
+`totalExposure` with two distinct, separately named numbers:
+
+### 7.1 `primaryExposure` — the actual financial exposure, proven non-double-counted
+
+The engine only sums `inventoryExposureComponent` (`abs(inventoryValueDelta)`)
+and `realizedCogsExposureComponent` (`abs(cogsDelta)`) when it can *prove*
+the underlying unit populations are disjoint — never on assumption:
 
 ```
-totalExposure = abs(inventoryValueDelta) + abs(cogsDelta)
+onHandAffectedUnits + soldAffectedUnits =?= totalBaseInAffected   (tolerance 0.001)
 ```
 
-implemented in `src/engine/financial-exposure.ts`. `delta` is defined
-throughout as `correctValue − currentlyReportedValue` (positive =
-understatement, negative = overstatement), so both terms are taken as
-absolute values before summing.
+This reconciliation holds by construction: `quantityOnHand = totalBaseIn −
+totalBaseOut` is a structural accounting identity for any product — a base
+unit that entered inventory is, at any point in time, either still on hand or
+already sold, never both. `onHandAffectedUnits` and `soldAffectedUnits` are
+therefore proven non-overlapping populations, which is why
+`inventoryExposureComponent` (the misstatement on the on-hand population) and
+`realizedCogsExposureComponent` (the misstatement on the sold population) can
+be added together without double-counting. When this holds,
+`exposureMethod: 'DISJOINT_POPULATION_SUM'` and `populationsProvenDisjoint:
+true` are reported alongside a human-readable `reconciliationInvariant`
+string showing the actual numbers that reconciled.
 
-**What is included:** the balance-sheet misstatement (inventory value) and
-the income-statement misstatement (realized COGS) — the two places money is
-actually wrong on the books.
+**Fallback — when the proof does not hold:** if the reconciliation check
+ever fails (`exposureMethod: 'MAX_STATEMENT_LINE'`,
+`populationsProvenDisjoint: false`), the engine does **not** fall back to
+summing anyway. It reports the single largest statement-line absolute value
+instead — `max(inventoryExposureComponent, realizedCogsExposureComponent,
+abs(grossProfitDelta))` — which is guaranteed never to overstate the true
+exposure even without a non-overlap proof. This fallback does not occur
+naturally in the current conversion-error demo scenario (the identity always
+reconciles there), but it is exercised directly in
+`tests/unit/engine/financial-exposure.test.ts` with a deliberately broken
+invariant, so the branch is verified rather than theoretical.
 
-**What is deliberately excluded, and why:**
+For the current seed, both components are 14.400.000 and the identity
+reconciles (1440 on-hand + 1440 sold = 2880 total base-in), so
+`primaryExposure = 28.800.000` — numerically the same figure FASE 4 reported,
+but now backed by an explicit, tested proof instead of an unproven
+assumption.
 
-- `grossProfitDelta` is **not** added a second time. Since revenue is
-  untouched by a unit-conversion error, `grossProfitDelta` is mathematically
-  `-cogsDelta` — the same misstatement, viewed from the income-statement
-  side, with the opposite sign. Adding it in would double-count the same
-  dollar of exposure. `grossProfitDelta` is still reported in
-  `financialImpact` as a business-readable framing of the same number, but
-  it does not contribute to `totalExposure`.
-- `grossMarginPercentageDelta` is a ratio, not a currency amount, and cannot
-  be summed with money figures.
+`grossProfitDelta` is never added into `primaryExposure`. Since revenue is
+untouched by a unit-conversion error, `grossProfitDelta` is mathematically
+`-cogsDelta` by construction (`correctGrossProfit = revenue - correctCogs`) —
+the same misstatement restated with the opposite sign, not a third
+independent dollar of exposure.
 
-**Limitation:** this formula assumes the two misstatements do not overlap
-(e.g. it would not be correct as written if a scenario also misstated
-revenue directly — that case does not occur in the current conversion-error
-scenario and is out of scope for FASE 4).
+### 7.2 `grossStatementFootprint` — every statement line, deliberately allowed to double-count
+
+```
+grossStatementFootprint = abs(inventoryValueDelta) + abs(cogsDelta) + abs(grossProfitDelta)
+```
+
+This is the raw sum of every affected statement line, kept only as a
+secondary, explicitly-named figure for callers that want "how many statement
+lines did this touch, added up naively" — it is never labeled or consumed as
+the financial exposure. For the current seed this is 43.200.000 (three times
+14.400.000), clearly larger than and never confused with `primaryExposure`
+(28.800.000).
+
+**What is still reported per-statement, regardless of the above:**
+`inventoryValueDelta`, `cogsDelta`, `grossProfitDelta`, and
+`grossMarginPercentageDelta` remain in `financialImpact` unchanged — the
+distinction above governs only how they're *combined* into a headline
+exposure number, not whether each individual statement effect is shown.
 
 ## 8. Evidence model
 
@@ -217,6 +267,108 @@ an incident into one of three roles:
 Assets with zero affected records are omitted (except `root_cause`, which is
 always shown). `affectedRecordCount` is the sum of `recordCount` across the
 included assets.
+
+## 9a. Record-impact classification: evidence vs. correction target vs. downstream (FASE 4.1)
+
+Before FASE 4.1, `affectedRecordCount` (via `blastRadius`) lumped every
+touched record into one number regardless of whether it would ever be
+mutated. `record-impact.ts`'s `buildRecordImpact()` splits records into three
+non-overlapping buckets, each a list of `{ table, recordId }` refs plus a
+count:
+
+- **`evidenceRecords`** — records that help *prove* the incident happened but
+  are never themselves mutated. Sourced from the incident's affected
+  `inventory_movements` and `journal_entries` IDs. For the current seed:
+  24 movements + 36 journal entries = 60.
+- **`correctionTargets`** — records that FASE 6 will actually mutate or
+  regenerate. Derived from `proposedCorrections`, deduplicated by
+  `(table, recordId)` so that e.g. three field-level corrections on the same
+  `inventory_valuation` row count once, not three times. `proposedCorrections`
+  whose `action` is `RECONCILE_JOURNAL_ENTRIES` are excluded — that action is
+  a read-only cross-check (see §10) and never mutates the `journal_entries`
+  row it reads, so that row belongs only in `evidenceRecords`, never in
+  `correctionTargets`. For the current seed: `product_units`,
+  `inventory_valuation`, `gross_margin_report` = 3.
+- **`downstreamAffectedRecords`** — records that aren't corrected by this
+  remediation but are affected as a knock-on consequence (e.g. a report that
+  reads from a corrected table but isn't itself regenerated). Empty for the
+  current single-incident scenario; the field exists so a future
+  multi-hop-impact scenario has somewhere to put such records without
+  overloading `correctionTargets`.
+
+`uniqueRecordCount` is the size of the deduplicated union of all three
+buckets — not their naive sum — so a record referenced in more than one
+bucket (which cannot currently happen given the exclusion rule above, but is
+guarded regardless) is still counted once. For the current seed this equals
+`blastRadius.affectedRecordCount` (63), cross-validating both models against
+each other from independent code paths.
+
+**Remediation previews must read `correctionTargets`, never
+`evidenceRecords`** — a UI or agent building a "what will actually change"
+summary should enumerate `recordImpact.correctionTargets`, not all
+`affectedRecords`, or it will present read-only evidence as if it were about
+to be modified.
+
+## 9b. `incidentType` vs. `overallStatus`: two independent axes (FASE 4.1)
+
+FASE 4 conflated "is there a named incident" with "is everything fine" by
+using a shared `HEALTHY` value inside what was effectively an incident-type
+field. FASE 4.1 splits this into two independent fields on
+`IncidentInvestigationReport`:
+
+- **`incidentType`** — `'UNIT_CONVERSION_MISMATCH' | null`. Names a
+  *specific, engine-recognized incident category*. It is `null` whenever no
+  such named incident was detected — it is never used to assert "everything
+  is fine," because a report can have `incidentType: null` and still be
+  unhealthy (see case B below).
+- **`overallStatus`** — `'HEALTHY' | 'DEGRADED' | 'CRITICAL'`. The aggregate
+  health signal, derived in `investigate.ts`'s `deriveOverallStatus()`:
+  1. Any root cause found (`incidentType` non-null) → `CRITICAL`.
+  2. Else, any quality check `FAIL` with `severity: 'critical'` → `CRITICAL`.
+  3. Else, any quality check `FAIL` with `severity: 'warning'` → `DEGRADED`.
+  4. Else → `HEALTHY`.
+
+Three scenarios exercised directly in the test suite:
+
+| Scenario | `incidentType` | `overallStatus` | Test |
+|---|---|---|---|
+| A. Healthy baseline | `null` | `HEALTHY` | `investigate.test.ts` case 1 |
+| B. Pre-existing journal imbalance, no conversion incident | `null` | `CRITICAL` (JournalBalanceCheck is `severity: 'critical'`) | `quality-checks.test.ts` case 7 |
+| C. Conversion-factor incident | `UNIT_CONVERSION_MISMATCH` | `CRITICAL` | `investigate.test.ts` case 2 |
+
+Scenario B is the reason this split exists: a structural bookkeeping problem
+unrelated to any named incident type must still degrade `overallStatus`,
+without being mislabeled as an `UNIT_CONVERSION_MISMATCH` it has nothing to
+do with (§6).
+
+Note this is unrelated to `verify.ts`'s `VerificationResult.overallStatus`
+(`'PASS' | 'FAIL'`), which aggregates post-remediation check results, not
+incident health — the two `overallStatus` fields live on different types and
+happen to share a name.
+
+## 9c. Expected-value provenance (FASE 4.1)
+
+`RootCause.expectedValueSource` answers "why is 12 considered correct and 10
+considered wrong?" — it is never a hardcoded assumption. For the MVP, the
+only source type is `'baseline_snapshot'`:
+
+```ts
+{
+  type: 'baseline_snapshot',
+  recordId: 'baseline',
+  capturedAt: <the baseline_snapshot row's captured_at column>,
+  evidenceReference: 'baseline_snapshot.conversionFactor.<unitName>'
+}
+```
+
+`fetchBaselineSnapshot()` (`src/db/repositories/reports.ts`) reads
+`captured_at` as a real column alongside the snapshot's JSON blob and merges
+it into the parsed `BaselineSnapshot` object — it is not embedded inside the
+JSON payload itself, so it reflects the actual row timestamp regardless of
+when the JSON was authored. `conversion-impact.ts`'s `selectRootCause()`
+takes the loaded baseline as a parameter specifically so it can attach this
+provenance to whichever root cause it selects, rather than asserting the
+expected value with no traceable origin.
 
 ## 10. Safe remediation preview (FASE 4 only previews; FASE 6 executes)
 
@@ -297,8 +449,10 @@ same input and assert `JSON.stringify()` equality.
   only; FASE 6 executes, after human approval, in a transaction.
 - It does not detect more than one root cause per investigation (§3).
 - It does not attempt cross-scenario generalization beyond the
-  unit-conversion-factor incident type — `IncidentType` currently has two
-  values, `HEALTHY` and `UNIT_CONVERSION_MISMATCH`.
+  unit-conversion-factor incident type — `incidentType` currently has one
+  named value, `UNIT_CONVERSION_MISMATCH`, or `null` when no such incident is
+  detected (§9b; `null` does not imply healthy — check `overallStatus`
+  separately).
 - It never reads or writes anything outside the demo database
   (`ledgerguard-postgres`).
 
