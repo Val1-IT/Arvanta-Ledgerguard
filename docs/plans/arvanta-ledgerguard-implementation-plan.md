@@ -176,7 +176,21 @@ show the DataHub metadata and write-back as proof.
   integration tests against `ledgerguard-postgres` (PostgreSQL demo milik
   Arvanta LedgerGuard) + real example artifacts via `npm run example`. See
   `docs/architecture/financial-integrity-engine.md` for the full design.
-- FASE 5 — Agent investigation via MCP.
+- FASE 5 — Agent investigation via MCP. **Done.** `src/agent/*`: 13-state /
+  7-failure-state orchestrator (`runInvestigation()`) wiring the FASE 4 engine, a real
+  DataHub MCP bridge (`src/agent/datahub-client.ts`, spawning
+  `src.datahub.mcp.agent_bridge`), and an LLM planning layer
+  (`AnthropicInvestigationModel` + `DeterministicTestModel`) behind a 7-rule
+  reconciliation layer (`src/agent/reconciliation.ts`) that rejects any model claim not
+  literally backed by the engine result or real DataHub context. Activity logging with
+  chronological resequencing and secret redaction
+  (`src/agent/activity-log.ts`); persistence via `investigation_runs`
+  (`src/db/repositories/investigation-runs.ts`); minimum test UI at `app/agent/page.tsx`.
+  14/14 required unit tests + 3 live integration tests against `ledgerguard-postgres`
+  and a live DataHub MCP server (`npm run test:agent`) + a real example artifact
+  (`npm run example:agent`). Remediation execution is explicitly out of scope — see
+  `docs/architecture/investigation-agent.md` for the full design and division of
+  responsibility.
 - FASE 6 — Containment, dry-run, approval, execution, rollback, verification,
   write-back.
 - FASE 7 — Overview and incident UI.

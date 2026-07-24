@@ -27,6 +27,7 @@
     "db:wait": "tsx src/db/wait.ts",
     "scenario:conversion-error": "tsx demo-data/scenarios/conversion-error.ts",
     "example": "tsx scripts/generate-example.ts",
+    "example:agent": "tsx scripts/generate-agent-example.ts",
     "datahub:up": "node scripts/py.mjs -m datahub.entrypoints docker quickstart",
     "datahub:down": "node scripts/py.mjs -m datahub.entrypoints docker quickstart --stop",
     "datahub:status": "node scripts/py.mjs -m datahub.entrypoints docker check",
@@ -35,9 +36,11 @@
     "datahub:writeback-proof": "node scripts/py.mjs -m src.datahub.mcp.writeback",
     "datahub:metadata-reset": "node scripts/py.mjs -m src.datahub.mcp.writeback --restore",
     "datahub:mcp-mutation-proof": "node scripts/py.mjs -m src.datahub.mcp.mutation_proof",
-    "test:datahub": "vitest run --config vitest.datahub.config.ts"
+    "test:datahub": "vitest run --config vitest.datahub.config.ts",
+    "test:agent": "vitest run tests/unit/agent && vitest run --config vitest.datahub.config.ts tests/datahub/agent-orchestrator.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.114.0",
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.36.4",
     "lucide-react": "^0.542.0",

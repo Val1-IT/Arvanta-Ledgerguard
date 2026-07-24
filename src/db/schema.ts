@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 import {
-  integer,
   numeric,
   pgTable,
   text,
@@ -103,22 +102,27 @@ export const ledgerguardIncidents = pgTable('ledgerguard_incidents', {
   resolvedAt: timestamp('resolved_at', { withTimezone: true })
 });
 
+// FASE 5 — DataHub-aware investigation agent run record (src/agent/orchestrator.ts).
+// incidentId is caller-supplied (InvestigationAgentInput) and is NOT required to
+// pre-exist in ledgerguard_incidents, so there is deliberately no FK here — a
+// TEST-mode or example-generation run can use any incident identifier.
+// input/output/error/stateHistory are the exact InvestigationRunRecord slices
+// (src/agent/types.ts), stored as JSON text the same way baseline_snapshot
+// stores value_json elsewhere in this file. Never store chain-of-thought here —
+// only the already-schema-validated, reconciled InvestigationOutput.
 export const investigationRuns = pgTable('investigation_runs', {
-  id: text('id')
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  incidentId: text('incident_id')
-    .notNull()
-    .references(() => ledgerguardIncidents.id),
-  rootCause: text('root_cause'),
-  affectedAssetCount: integer('affected_asset_count'),
-  affectedRecordCount: integer('affected_record_count'),
-  estimatedFinancialExposure: numeric('estimated_financial_exposure', {
-    precision: 18,
-    scale: 2
-  }),
-  confidence: numeric('confidence', { precision: 5, scale: 4 }),
-  resultJson: text('result_json'),
+  id: text('id').primaryKey(),
+  incidentId: text('incident_id').notNull(),
+  productId: text('product_id').notNull(),
+  triggerAsset: text('trigger_asset').notNull(),
+  requestedBy: text('requested_by').notNull(),
+  mode: text('mode').notNull(),
+  finalState: text('final_state').notNull(),
+  status: text('status'),
+  inputJson: text('input_json').notNull(),
+  outputJson: text('output_json'),
+  errorJson: text('error_json'),
+  stateHistoryJson: text('state_history_json').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 

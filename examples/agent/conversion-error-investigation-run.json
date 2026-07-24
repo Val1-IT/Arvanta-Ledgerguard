@@ -1,0 +1,259 @@
+{
+  "investigationId": "d12d3662-9cc0-41c1-972f-832e8df1aec2",
+  "incidentId": "example-conversion-error",
+  "input": {
+    "incidentId": "example-conversion-error",
+    "productId": "prod-cement-40",
+    "triggerAsset": "inventory_valuation",
+    "requestedBy": "example-generator",
+    "mode": "TEST"
+  },
+  "finalState": "INVESTIGATION_COMPLETED",
+  "output": {
+    "schemaVersion": "1.0",
+    "investigationId": "d12d3662-9cc0-41c1-972f-832e8df1aec2",
+    "incidentId": "example-conversion-error",
+    "status": "COMPLETED",
+    "evidenceSufficiency": {
+      "sufficient": true,
+      "confidence": 0.95,
+      "missingEvidence": []
+    },
+    "rootCauseExplanation": "The root cause is a mismatch on product_units.conversion_factor for unit \"CARTON\" (product prod-cement-40): the value on record is 10.0000, but the value captured in the baseline snapshot at seed time was 12.0000 (source: baseline_snapshot.conversionFactor.CARTON, captured 2026-01-01T00:00:00.000Z). The difference is -2.0000.",
+    "businessImpactExplanation": "The reconciled primary exposure is 28800000.00 IDR, computed as the sum of two disjoint components proven not to overlap (onHandAffectedUnits (1440.000) + soldAffectedUnits (1440.000) = totalBaseIn (2880.000); quantityOnHand = totalBaseIn - totalBaseOut is a structural accounting identity, so a base unit is either on hand or sold, never both — the two exposure components are proven disjoint): an inventory-value component of 14400000.00 on 1440.000 units still on hand, and a realized-COGS component of 14400000.00 on 1440.000 units already sold. The raw statement footprint (43200000.00 IDR) is a separate, larger figure that sums every affected statement line including a restatement of the same delta as gross profit — it is reported for transparency only and must not be read as the exposure.",
+    "datahubContext": {
+      "assetsRead": [
+        "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)"
+      ],
+      "owners": [
+        "urn:li:corpGroup:data-platform",
+        "urn:li:corpGroup:finance-controller"
+      ],
+      "glossaryTerms": [
+        "urn:li:glossaryTerm:FinanciallyTrustedDataset",
+        "urn:li:glossaryTerm:InventoryValuation"
+      ],
+      "tags": [
+        "urn:li:tag:ERP",
+        "urn:li:tag:Finance",
+        "urn:li:tag:Inventory"
+      ],
+      "lineagePath": [
+        "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.journal_entries,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.gross_margin_report,PROD)"
+      ]
+    },
+    "engineResultReference": {
+      "incidentType": "UNIT_CONVERSION_MISMATCH",
+      "overallStatus": "CRITICAL",
+      "primaryExposure": "28800000.00",
+      "currency": "IDR",
+      "affectedRecordCount": 63,
+      "correctionTargetCount": 3
+    },
+    "remediationRationale": "The proposed corrections (RESTORE_CONVERSION_FACTOR on product_units:pu-carton.conversion_factor (10.0000 -> 12.0000); REGENERATE_INVENTORY_VALUATION on inventory_valuation:val-cement-40.quantity_on_hand (960.000 -> 1440.000); REGENERATE_INVENTORY_VALUATION on inventory_valuation:val-cement-40.average_cost (60000.00 -> 50000.00); REGENERATE_INVENTORY_VALUATION on inventory_valuation:val-cement-40.inventory_value (57600000.00 -> 72000000.00); RECONCILE_JOURNAL_ENTRIES on journal_entries:2026-01.cost_of_goods_sold_reconciliation (72000000.00 -> 72000000.00); REGENERATE_GROSS_MARGIN_REPORT on gross_margin_report:gmr-2026-01.cost_of_goods_sold (86400000.00 -> 72000000.00); REGENERATE_GROSS_MARGIN_REPORT on gross_margin_report:gmr-2026-01.gross_profit (21600000.00 -> 36000000.00); REGENERATE_GROSS_MARGIN_REPORT on gross_margin_report:gmr-2026-01.gross_margin_percentage (20.0000 -> 33.3333)) restore the conversion factor to its baseline-proven value and regenerate every downstream figure that depended on it, without touching any already-posted journal entry directly; RECONCILE_JOURNAL_ENTRIES only re-confirms the ledger matches the recomputed COGS.",
+    "recommendedNextStep": "REQUEST_APPROVAL",
+    "activityLog": [
+      {
+        "seq": 1,
+        "tool": "engine.loadInvestigationInput",
+        "startedAt": "2026-07-24T10:43:44.024Z",
+        "finishedAt": "2026-07-24T10:43:44.054Z",
+        "durationMs": 30,
+        "inputSummary": "undefined",
+        "outputSummary": "{\"products\":[{\"id\":\"prod-cement-40\",\"sku\":\"CEM-40\",\"name\":\"Cement Premium 40kg\",\"baseUnit\":\"PCS\",\"standardCost\":\"50000.00\"}],\"productUnits\":[{\"id\":\"pu-carton\",\"productId\":\"prod-cement-40\",\"unitName\":\"CARTON\",\"conversionFactor\":\"10.0000\",\"validFrom\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-03-09T00:00:00.000Z\"},{\"id\":\"pu-pcs\",\"productId\":\"prod-cement-40\",\"unitName\":\"PCS\",\"conversionFactor\":\"1.0000\",\"validFrom\":\"2026-01-01T00:00:00.000Z\",\"updatedAt\":\"2026-01-01T00:00:00.000Z\"}],\"movements\":[{\"id\":\"mov-p-0001\",\"productId\":\"prod-cement-40\",\"movementType\":\"in\",\"quantity\":\"10.000\",\"unitName\":\"CA…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 2,
+        "tool": "engine.investigate",
+        "startedAt": "2026-07-24T10:43:44.055Z",
+        "finishedAt": "2026-07-24T10:43:44.061Z",
+        "durationMs": 6,
+        "inputSummary": "{\"incidentId\":\"example-conversion-error\",\"productId\":\"prod-cement-40\"}",
+        "outputSummary": "{\"incidentType\":\"UNIT_CONVERSION_MISMATCH\",\"overallStatus\":\"CRITICAL\",\"rootCause\":{\"asset\":\"product_units\",\"field\":\"conversion_factor\",\"productId\":\"prod-cement-40\",\"unitId\":\"pu-carton\",\"unitName\":\"CARTON\",\"expectedValue\":\"12.0000\",\"actualValue\":\"10.0000\",\"delta\":\"-2.0000\",\"expectedValueSource\":{\"type\":\"baseline_snapshot\",\"recordId\":\"baseline\",\"capturedAt\":\"2026-01-01T00:00:00.000Z\",\"evidenceReference\":\"baseline_snapshot.conversionFactor.CARTON\"}},\"affectedRecords\":{\"inventoryMovements\":[\"mov-p-0001\",\"mov-p-0002\",\"mov-p-0003\",\"mov-p-0004\",\"mov-p-0005\",\"mov-p-0006\",\"mov-p-0007\",\"mov-p-0008\",\"mov…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 3,
+        "tool": "search",
+        "startedAt": "2026-07-24T10:43:49.689Z",
+        "finishedAt": "2026-07-24T10:43:50.309Z",
+        "durationMs": 620,
+        "inputSummary": "{\"query\": \"inventory_valuation\", \"num_results\": 10}",
+        "outputSummary": "{\"start\":0,\"count\":10,\"total\":10,\"searchResults\":[{\"entity\":{\"urn\":\"urn:li:glossaryTerm:InventoryValuation\",\"properties\":{\"name\":\"Inventory Valuation\"}}},{\"entity\":{\"urn\":\"urn:li:tag:Inventory Critical\"}},{\"entity\":{\"urn\":\"urn:li:corpGroup:inventory-operations\"}},{\"entity\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\",\"properties\":{\"name\":\"ledgerguard.public.inventory_valuation\"}}},{\"entity\":{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_movements,PROD)\",\"properties\":{\"name\":\"ledgerguard.public.inventory_mo…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 4,
+        "tool": "get_entities",
+        "startedAt": "2026-07-24T10:43:50.271Z",
+        "finishedAt": "2026-07-24T10:43:50.930Z",
+        "durationMs": 659,
+        "inputSummary": "{\"urns\": [\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\"]}",
+        "outputSummary": "[{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\",\"name\":\"ledgerguard.public.inventory_valuation\",\"platform\":{\"urn\":\"urn:li:dataPlatform:postgres\",\"name\":\"postgres\"},\"editableProperties\":{\"description\":\"Current stock position and its monetary value per product, aggregated from inventory_movements base quantities.\"},\"properties\":{\"name\":\"ledgerguard.public.inventory_valuation\",\"customProperties\":[{\"key\":\"demo_row_count\",\"value\":\"1\"},{\"key\":\"erp_module\",\"value\":\"finance\"}]},\"ownership\":{\"owners\":[{\"owner\":{\"urn\":\"urn:li:corpGroup:finance-controll…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 5,
+        "tool": "get_lineage",
+        "startedAt": "2026-07-24T10:43:50.318Z",
+        "finishedAt": "2026-07-24T10:43:51.589Z",
+        "durationMs": 1271,
+        "inputSummary": "{\"urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"upstream\": false, \"max_hops\": 5}",
+        "outputSummary": "{\"downstreams\":{\"total\":2,\"facets\":[{\"field\":\"degree\",\"displayName\":\"Degree of Dependencies\",\"aggregations\":[{\"value\":\"1\",\"count\":0},{\"value\":\"2\",\"count\":0},{\"value\":\"3+\",\"count\":0}]},{\"field\":\"_entityType\",\"displayName\":\"Type\",\"aggregations\":[{\"value\":\"DATASET\",\"count\":2}]},{\"field\":\"typeNames\",\"displayName\":\"Sub Type\",\"aggregations\":[{\"value\":\"Table\",\"count\":2}]},{\"field\":\"platform\",\"displayName\":\"Platform\",\"aggregations\":[{\"value\":\"urn:li:dataPlatform:postgres\",\"count\":2,\"entity\":{\"urn\":\"urn:li:dataPlatform:postgres\"}}]},{\"field\":\"tags\",\"displayName\":\"Tagged With\",\"aggregations\":[{\"value\":\"…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 6,
+        "tool": "orchestrator.mergeEvidence",
+        "startedAt": "2026-07-24T10:43:53.929Z",
+        "finishedAt": "2026-07-24T10:43:53.929Z",
+        "durationMs": 0,
+        "inputSummary": "{\"incidentId\":\"example-conversion-error\",\"triggerAsset\":\"inventory_valuation\"}",
+        "outputSummary": "{\"incidentId\":\"example-conversion-error\",\"triggerAsset\":\"inventory_valuation\",\"engineResult\":{\"incidentType\":\"UNIT_CONVERSION_MISMATCH\",\"overallStatus\":\"CRITICAL\",\"rootCause\":{\"asset\":\"product_units\",\"field\":\"conversion_factor\",\"productId\":\"prod-cement-40\",\"unitId\":\"pu-carton\",\"unitName\":\"CARTON\",\"expectedValue\":\"12.0000\",\"actualValue\":\"10.0000\",\"delta\":\"-2.0000\",\"expectedValueSource\":{\"type\":\"baseline_snapshot\",\"recordId\":\"baseline\",\"capturedAt\":\"2026-01-01T00:00:00.000Z\",\"evidenceReference\":\"baseline_snapshot.conversionFactor.CARTON\"}},\"affectedRecords\":{\"inventoryMovements\":[\"mov-p-0001\",\"m…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 7,
+        "tool": "model.generateInvestigation",
+        "startedAt": "2026-07-24T10:43:53.929Z",
+        "finishedAt": "2026-07-24T10:43:53.930Z",
+        "durationMs": 1,
+        "inputSummary": "undefined",
+        "outputSummary": "{\"schemaVersion\":\"1.0\",\"evidenceSufficiency\":{\"sufficient\":true,\"confidence\":0.95,\"missingEvidence\":[]},\"rootCauseExplanation\":\"The root cause is a mismatch on product_units.conversion_factor for unit \\\"CARTON\\\" (product prod-cement-40): the value on record is 10.0000, but the value captured in the baseline snapshot at seed time was 12.0000 (source: baseline_snapshot.conversionFactor.CARTON, captured 2026-01-01T00:00:00.000Z). The difference is -2.0000.\",\"businessImpactExplanation\":\"The reconciled primary exposure is 28800000.00 IDR, computed as the sum of two disjoint components proven not to…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 8,
+        "tool": "add_tags",
+        "startedAt": "2026-07-24T10:43:59.418Z",
+        "finishedAt": "2026-07-24T10:44:00.772Z",
+        "durationMs": 1354,
+        "inputSummary": "{\"urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"tags\": [\"urn:li:tag:At Risk\"]}",
+        "outputSummary": "4 validation errors for call[add_tags] tag_urns Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument entity_urns Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument urn Unexpected keyword argument [type=unexpected_keyword_argument, input_value='urn:li:dataset:(urn:li:d...ven…(truncated)",
+        "status": "ERROR",
+        "errorSanitized": "4 validation errors for call[add_tags] tag_urns Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument entity_urns Missing required argument…(truncated)"
+      },
+      {
+        "seq": 9,
+        "tool": "add_tags",
+        "startedAt": "2026-07-24T10:43:59.859Z",
+        "finishedAt": "2026-07-24T10:44:00.315Z",
+        "durationMs": 456,
+        "inputSummary": "{\"urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"tag_urns\": [\"urn:li:tag:At Risk\"]}",
+        "outputSummary": "2 validation errors for call[add_tags] entity_urns Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument urn Unexpected keyword argument [type=unexpected_keyword_argument, input_value='urn:li:dataset:(urn:li:d...ventory_valuation,PROD)', input_type=str] For further information visit https://errors.pydantic.dev/2.11/v/unexpected_keyword_argument",
+        "status": "ERROR",
+        "errorSanitized": "2 validation errors for call[add_tags] entity_urns Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument urn Unexpected keyword argument [t…(truncated)"
+      },
+      {
+        "seq": 10,
+        "tool": "update_description",
+        "startedAt": "2026-07-24T10:44:01.174Z",
+        "finishedAt": "2026-07-24T10:44:02.583Z",
+        "durationMs": 1409,
+        "inputSummary": "{\"urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"description\": \"Current stock position and its monetary value per product, aggregated from inventory_movements base quantities.\\n\\nLedgerGu… (+429 chars)",
+        "outputSummary": "2 validation errors for call[update_description] entity_urn Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(...ion has been executed.'}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument urn Unexpected keyword argument [type=unexpected_keyword_argument, input_value='urn:li:dataset:(urn:li:d...ventory_valuation,PROD)', input_type=str] For further information visit https://errors.pydantic.dev/2.11/v/unexpected_keyword_argument",
+        "status": "ERROR",
+        "errorSanitized": "2 validation errors for call[update_description] entity_urn Missing required argument [type=missing_argument, input_value={'urn': 'urn:li:dataset:(...ion has been executed.'}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument urn Unexpected keyword ar…(truncated)"
+      },
+      {
+        "seq": 11,
+        "tool": "add_tags",
+        "startedAt": "2026-07-24T10:44:01.671Z",
+        "finishedAt": "2026-07-24T10:44:02.127Z",
+        "durationMs": 456,
+        "inputSummary": "{\"entity_urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"tag_urns\": [\"urn:li:tag:At Risk\"]}",
+        "outputSummary": "2 validation errors for call[add_tags] entity_urns Missing required argument [type=missing_argument, input_value={'entity_urn': 'urn:li:da... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument entity_urn Unexpected keyword argument [type=unexpected_keyword_argument, input_value='urn:li:dataset:(urn:li:d...ventory_valuation,PROD)', input_type=str] For further information visit https://errors.pydantic.dev/2.11/v/unexpected_keyword_argument",
+        "status": "ERROR",
+        "errorSanitized": "2 validation errors for call[add_tags] entity_urns Missing required argument [type=missing_argument, input_value={'entity_urn': 'urn:li:da... ['urn:li:tag:At Risk']}, input_type=dict] For further information visit https://errors.pydantic.dev/2.11/v/missing_argument entity_urn Unexpected keyword argu…(truncated)"
+      },
+      {
+        "seq": 12,
+        "tool": "get_entities",
+        "startedAt": "2026-07-24T10:44:02.173Z",
+        "finishedAt": "2026-07-24T10:44:05.644Z",
+        "durationMs": 3471,
+        "inputSummary": "{\"urns\": [\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\"]}",
+        "outputSummary": "[{\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\",\"name\":\"ledgerguard.public.inventory_valuation\",\"platform\":{\"urn\":\"urn:li:dataPlatform:postgres\",\"name\":\"postgres\"},\"editableProperties\":{\"description\":\"Current stock position and its monetary value per product, aggregated from inventory_movements base quantities.\\n\\nLedgerGuard investigation note\\nRoot cause: unit conversion mismatch on CARTON (product_units.conversion_factor expected 12.0000, actual 10.0000).\\nPrimary exposure: 28800000.00 IDR.\\nCorrection targets: 3 record(s).\\nEvidence suffi…(truncated)",
+        "status": "OK",
+        "errorSanitized": null
+      },
+      {
+        "seq": 13,
+        "tool": "update_description",
+        "startedAt": "2026-07-24T10:44:02.530Z",
+        "finishedAt": "2026-07-24T10:44:03.993Z",
+        "durationMs": 1463,
+        "inputSummary": "{\"entity_urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"description\": \"Current stock position and its monetary value per product, aggregated from inventory_movements base quantities.\\n\\nL… (+436 chars)",
+        "outputSummary": "{\"success\":true,\"urn\":\"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\",\"column_path\":null,\"message\":\"Description updated successfully\"}",
+        "status": "OK",
+        "errorSanitized": null
+      }
+    ]
+  },
+  "error": null,
+  "stateHistory": [
+    {
+      "state": "INCIDENT_RECEIVED",
+      "at": "2026-07-24T10:43:44.024Z"
+    },
+    {
+      "state": "ENGINE_ANALYSIS_STARTED",
+      "at": "2026-07-24T10:43:44.024Z"
+    },
+    {
+      "state": "ENGINE_ANALYSIS_COMPLETED",
+      "at": "2026-07-24T10:43:44.061Z"
+    },
+    {
+      "state": "DATAHUB_ASSET_SEARCH",
+      "at": "2026-07-24T10:43:44.061Z"
+    },
+    {
+      "state": "DATAHUB_SCHEMA_READ",
+      "at": "2026-07-24T10:43:53.929Z"
+    },
+    {
+      "state": "DATAHUB_OWNER_READ",
+      "at": "2026-07-24T10:43:53.929Z"
+    },
+    {
+      "state": "DATAHUB_GLOSSARY_READ",
+      "at": "2026-07-24T10:43:53.929Z"
+    },
+    {
+      "state": "DATAHUB_LINEAGE_TRAVERSED",
+      "at": "2026-07-24T10:43:53.929Z"
+    },
+    {
+      "state": "EVIDENCE_RECONCILED",
+      "at": "2026-07-24T10:43:53.929Z"
+    },
+    {
+      "state": "MODEL_ANALYSIS_STARTED",
+      "at": "2026-07-24T10:43:53.929Z"
+    },
+    {
+      "state": "MODEL_ANALYSIS_VALIDATED",
+      "at": "2026-07-24T10:43:53.931Z"
+    },
+    {
+      "state": "INVESTIGATION_SUMMARY_WRITTEN",
+      "at": "2026-07-24T10:44:10.158Z"
+    },
+    {
+      "state": "INVESTIGATION_COMPLETED",
+      "at": "2026-07-24T10:44:10.158Z"
+    }
+  ],
+  "createdAt": "2026-07-24T10:43:44.024Z"
+}

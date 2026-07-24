@@ -27,7 +27,12 @@ export default function RootLayout({
                 Arvanta <span className="text-gold-strong">LedgerGuard</span>
               </span>
             </Link>
-            <span className="lg-tag border-ink text-ink-muted">Demo</span>
+            <nav className="flex items-center gap-4">
+              <Link href="/agent" className="text-sm font-semibold text-ink-muted hover:text-ink">
+                Agent
+              </Link>
+              <span className="lg-tag border-ink text-ink-muted">Demo</span>
+            </nav>
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
