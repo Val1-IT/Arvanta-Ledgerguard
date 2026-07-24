@@ -144,6 +144,45 @@ async def _do_read(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "failureState": "MCP_UNAVAILABLE", "message": f"{type(exc).__name__}: {exc}"}
 
 
+# Marks the region of a dataset's description that this bridge owns. Every
+# write-back replaces the ENTIRE region between these markers, never appends
+# to it — so calling this bridge N times (whether the caller is retrying the
+# same investigation after a transient failure, or running a brand-new one)
+# always converges to exactly one investigation note, not N concatenated
+# notes. The marker itself does not encode an investigationId: it does not
+# need to, because a write-back is always a full replace of the region, and
+# summary_text (built by orchestrator.ts's buildWritebackSummary) already
+# states which investigationId produced the current note.
+NOTE_MARKER_START = "<!-- ledgerguard:investigation-note:start -->"
+NOTE_MARKER_END = "<!-- ledgerguard:investigation-note:end -->"
+
+
+def _base_description(dataset: DatasetDef) -> str:
+    """The description to build a fresh note on top of.
+
+    This is deliberately the STATIC bootstrap description
+    (src/datahub/bootstrap/assets.py), never a live read of the dataset's
+    current description. Building on top of a live read would make the note
+    grow every time something upstream of this bridge behaved unexpectedly
+    (e.g. a stray manual edit, or a marker written by a differently-versioned
+    bridge); building on a known-clean, version-controlled baseline instead
+    means the result is always exactly "baseline + one note", regardless of
+    how many times this ran before or what state a prior run left behind.
+    The one defensive step taken is stripping the marker region out of the
+    baseline too, in case a future baseline ever accidentally includes it.
+    """
+    start = dataset.description.find(NOTE_MARKER_START)
+    if start == -1:
+        return dataset.description.rstrip()
+    return dataset.description[:start].rstrip()
+
+
+def _compose_note_text(dataset: DatasetDef, summary_text: str) -> str:
+    base = _base_description(dataset)
+    marker_block = f"{NOTE_MARKER_START}\n{summary_text}\n{NOTE_MARKER_END}"
+    return f"{base}\n\n{marker_block}" if base else marker_block
+
+
 async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
     target_table = payload["targetAsset"]
     summary_text = payload["summaryText"]
@@ -169,7 +208,7 @@ async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
                     ],
                 )
 
-            note_text = f"{dataset.description}\n\n{summary_text}"
+            note_text = _compose_note_text(dataset, summary_text)
             note_written = False
             if desc_tool:
                 note_written = await _try_call(

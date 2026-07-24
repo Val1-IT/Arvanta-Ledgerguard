@@ -37,7 +37,7 @@
     "datahub:metadata-reset": "node scripts/py.mjs -m src.datahub.mcp.writeback --restore",
     "datahub:mcp-mutation-proof": "node scripts/py.mjs -m src.datahub.mcp.mutation_proof",
     "test:datahub": "vitest run --config vitest.datahub.config.ts",
-    "test:agent": "vitest run tests/unit/agent && vitest run --config vitest.datahub.config.ts tests/datahub/agent-orchestrator.test.ts"
+    "test:agent": "vitest run tests/unit/agent && vitest run --config vitest.datahub.config.ts tests/datahub/agent-orchestrator.test.ts tests/datahub/live-model-smoke.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.114.0",

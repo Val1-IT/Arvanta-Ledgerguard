@@ -1,0 +1,401 @@
+# LedgerGuard Agent — Data Contract (for Cursor UI work)
+
+This document is a **data contract**, not a UI spec. It describes exactly what data is
+available to build a UI against as of FASE 5 (investigation only — no remediation yet),
+and how to read it. No visual design, layout, or component decision is made or implied
+here; that is entirely Cursor's / the final UI's responsibility.
+
+Every field, enum, and example below is copied from real runtime source — either
+`src/agent/types.ts` (the Zod schemas actually enforced) or
+[`examples/agent/conversion-error-investigation-run.json`](../../examples/agent/conversion-error-investigation-run.json)
+(a genuine artifact produced by `npm run example:agent` running the real orchestrator
+against real Postgres and a real DataHub MCP server — nothing in it is hand-invented).
+Where an example is trimmed for length, that is marked explicitly.
+
+## 1. There is currently no HTTP/REST API
+
+The only way to trigger an investigation today is a Next.js **Server Action**:
+[`app/agent/actions.ts`](../../app/agent/actions.ts).
+
+```ts
+'use server';
+export async function triggerInvestigation(formData: FormData): Promise<void>
+```
+
+It reads five string fields off `FormData` (`incidentId`, `productId`, `triggerAsset`,
+`requestedBy`, `mode`), runs `runInvestigation()` against the real database and the
+model picked by `pickModel()` (`AnthropicInvestigationModel` if
+`process.env.ANTHROPIC_API_KEY` is set, otherwise `DeterministicTestModel`), and on
+success calls `redirect('/agent/investigations/${record.investigationId}')`. It has no
+return value — a caller cannot get the result back as a plain value from this action;
+the only way to read the outcome today is the redirect target's page load (§3), which
+does a normal server-side `loadInvestigationRun()` call.
+
+**Implications for Cursor:**
+
+- If the final UI stays inside this Next.js app, it can either keep using this exact
+  server action bound to a `<form>` (progressive-enhancement style, as
+  `app/agent/page.tsx` does today — see `<form action={triggerInvestigation}>`), or call
+  `runInvestigation()` directly from a new server action/route that returns the record
+  instead of redirecting.
+- If the final UI needs a real HTTP JSON response (e.g. it is a separate
+  frontend, or needs to poll/fetch without a full page navigation), a thin Next.js Route
+  Handler wrapping `runInvestigation()` is the natural next step — none exists yet. This
+  document specifies the payload shapes such a route would need to accept/return
+  (§2, §4) so that work is a thin wrapper, not new design.
+- Nothing in `runInvestigation()` depends on being called from a Server Action
+  specifically — it is a plain async function
+  (`src/agent/orchestrator.ts`: `runInvestigation(input, deps)`) that any Node-side
+  caller (Server Action, Route Handler, script) can invoke identically.
+
+## 2. Trigger investigation — input shape
+
+Source of truth: `InvestigationAgentInputSchema` (`src/agent/types.ts`).
+
+```ts
+{
+  incidentId: string;   // min length 1 — caller-chosen identifier for this incident
+  productId: string;    // min length 1 — e.g. "prod-cement-40"
+  triggerAsset: string; // min length 1 — a DataHub dataset's table name, e.g. "inventory_valuation"
+  requestedBy: string;  // min length 1 — free text, who/what requested this run
+  mode: 'LIVE' | 'TEST';
+}
+```
+
+`mode: 'TEST'` does not change engine or DataHub behavior — both are always real. It
+only affects which `InvestigationModel` implementation is normally selected in test
+contexts; in `app/agent/actions.ts`, model selection is actually driven by whether
+`ANTHROPIC_API_KEY` is configured, independent of `mode`.
+
+The caller never supplies financial figures, root cause, or DataHub metadata — the
+agent derives all of that itself from the database and DataHub. There is no field for
+these because the contract deliberately does not trust caller-supplied numbers.
+
+Example (from `app/agent/page.tsx`'s default form values):
+
+```json
+{
+  "incidentId": "incident-manual-test-0001",
+  "productId": "prod-cement-40",
+  "triggerAsset": "product_units",
+  "requestedBy": "manual-test",
+  "mode": "TEST"
+}
+```
+
+## 3. Get investigation run
+
+Source of truth: `loadInvestigationRun(pool, investigationId)`
+(`src/db/repositories/investigation-runs.ts`), backed by the `investigation_runs` table.
+Returns `InvestigationRunRecord | null` (`null` if no row matches — see
+`app/agent/investigations/[id]/page.tsx`'s "Investigation not found" branch). The
+returned object is the same `InvestigationRunRecordSchema`-validated shape whether it
+was just produced by `runInvestigation()` or loaded back from Postgres — both pass
+through the identical Zod schema, so a UI never needs to handle two different shapes
+for "fresh" vs. "loaded" results.
+
+### 3.1 Top-level shape (`InvestigationRunRecordSchema`)
+
+```ts
+{
+  investigationId: string;   // UUID, generated by the orchestrator
+  incidentId: string;        // echoes input.incidentId
+  input: InvestigationAgentInput;  // §2, echoed verbatim
+  finalState: WorkflowState | FailureState;  // §3.2 / §6
+  output: InvestigationOutput | null;  // §4 — null iff finalState is a failure state reached before output was built
+  error: ErrorState | null;            // §6 — null iff finalState is a success state
+  stateHistory: Array<{ state: WorkflowState | FailureState; at: string /* ISO 8601 */ }>;
+  createdAt: string; // ISO 8601
+}
+```
+
+Exactly one of `output`/`error` is non-null for any given record — never both, never
+neither. A UI can switch on `finalState === 'INVESTIGATION_COMPLETED'` to decide which
+branch to render, exactly as `app/agent/investigations/[id]/page.tsx` does today.
+
+### 3.2 `stateHistory` — the 13-state success path
+
+```
+INCIDENT_RECEIVED
+  → ENGINE_ANALYSIS_STARTED → ENGINE_ANALYSIS_COMPLETED
+  → DATAHUB_ASSET_SEARCH → DATAHUB_SCHEMA_READ → DATAHUB_OWNER_READ
+    → DATAHUB_GLOSSARY_READ → DATAHUB_LINEAGE_TRAVERSED
+  → EVIDENCE_RECONCILED
+  → MODEL_ANALYSIS_STARTED → MODEL_ANALYSIS_VALIDATED
+  → INVESTIGATION_SUMMARY_WRITTEN
+  → INVESTIGATION_COMPLETED
+```
+
+Every transition is timestamped and appended before the next step runs, so
+`stateHistory` on a failed run shows exactly how far the investigation got — it is
+never truncated or discarded on failure. This is the data a "progress stepper" UI
+component would render; see §6 for what a UI should render for each of the 7 states
+this can instead end on.
+
+Real example (`stateHistory` from `examples/agent/conversion-error-investigation-run.json`):
+
+```json
+[
+  { "state": "INCIDENT_RECEIVED", "at": "2026-07-24T10:43:44.024Z" },
+  { "state": "ENGINE_ANALYSIS_STARTED", "at": "2026-07-24T10:43:44.024Z" },
+  { "state": "ENGINE_ANALYSIS_COMPLETED", "at": "2026-07-24T10:43:44.061Z" },
+  { "state": "DATAHUB_ASSET_SEARCH", "at": "2026-07-24T10:43:44.061Z" },
+  { "state": "DATAHUB_SCHEMA_READ", "at": "2026-07-24T10:43:53.929Z" },
+  { "state": "DATAHUB_OWNER_READ", "at": "2026-07-24T10:43:53.929Z" },
+  { "state": "DATAHUB_GLOSSARY_READ", "at": "2026-07-24T10:43:53.929Z" },
+  { "state": "DATAHUB_LINEAGE_TRAVERSED", "at": "2026-07-24T10:43:53.929Z" },
+  { "state": "EVIDENCE_RECONCILED", "at": "2026-07-24T10:43:53.929Z" },
+  { "state": "MODEL_ANALYSIS_STARTED", "at": "2026-07-24T10:43:53.929Z" },
+  { "state": "MODEL_ANALYSIS_VALIDATED", "at": "2026-07-24T10:43:53.931Z" },
+  { "state": "INVESTIGATION_SUMMARY_WRITTEN", "at": "2026-07-24T10:44:10.158Z" },
+  { "state": "INVESTIGATION_COMPLETED", "at": "2026-07-24T10:44:10.158Z" }
+]
+```
+
+## 4. Investigation output (`InvestigationOutputSchema`)
+
+Present only when `finalState === 'INVESTIGATION_COMPLETED'` (i.e. `record.output`).
+This is the primary payload a UI renders for a completed investigation.
+
+```ts
+{
+  schemaVersion: '1.0';
+  investigationId: string;
+  incidentId: string;
+  status: 'COMPLETED' | 'NEEDS_REVIEW' | 'FAILED';
+  evidenceSufficiency: { sufficient: boolean; confidence: number /* 0..1 */; missingEvidence: string[] };
+  rootCauseExplanation: string;      // human-readable prose, model-authored but reconciled (§4.4)
+  businessImpactExplanation: string; // human-readable prose, same guarantee
+  datahubContext: DataHubContext;    // §4.2 — always real MCP data, never model-authored
+  engineResultReference: EngineResultReference; // §4.3 — always copied from the engine, never model-authored
+  remediationRationale: string;      // prose explaining WHY a correction makes sense — not the correction plan itself; FASE 6 owns actually executing anything
+  recommendedNextStep: 'REQUEST_APPROVAL' | 'COLLECT_MORE_EVIDENCE' | 'ESCALATE_TO_OWNER' | 'NO_ACTION_REQUIRED';
+  activityLog: ActivityLogEntry[];   // §5
+}
+```
+
+`schemaVersion` is currently always the literal `'1.0'`. A UI should treat any other
+value as unsupported and fail loudly rather than silently rendering a possibly
+different shape.
+
+### 4.1 `recommendedNextStep` — what each value means for a UI
+
+| Value | Meaning | What a UI can safely offer |
+|---|---|---|
+| `REQUEST_APPROVAL` | The agent found a reconciled, sufficiently-evidenced incident and believes it is ready for a human to review the remediation rationale and approve/reject it. | A CTA toward approval — but note FASE 6 (the approval/execution workflow itself) is not yet built as of this document; see §8. |
+| `COLLECT_MORE_EVIDENCE` | `evidenceSufficiency.sufficient` was judged `false`; see `evidenceSufficiency.missingEvidence` for what is missing. | Surface `missingEvidence` to the user; do not offer an approval CTA. |
+| `ESCALATE_TO_OWNER` | The agent judged this needs a human/owner decision beyond what it can resolve itself. | Surface `datahubContext.owners` as the escalation target. |
+| `NO_ACTION_REQUIRED` | The engine found nothing wrong (e.g. the healthy-baseline case). | Render as a clean/healthy result, no CTA. |
+
+### 4.2 `DataHubContext` — always real MCP data
+
+```ts
+{
+  assetsRead: string[];      // DataHub dataset URNs actually read via MCP
+  owners: string[];          // e.g. "urn:li:corpGroup:finance-controller"
+  glossaryTerms: string[];   // e.g. "urn:li:glossaryTerm:InventoryValuation"
+  tags: string[];            // e.g. "urn:li:tag:Finance"
+  lineagePath: string[];     // ordered dataset URNs, trigger asset -> ... -> gross_margin_report
+}
+```
+
+Real example:
+
+```json
+{
+  "assetsRead": ["urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)"],
+  "owners": ["urn:li:corpGroup:data-platform", "urn:li:corpGroup:finance-controller"],
+  "glossaryTerms": ["urn:li:glossaryTerm:FinanciallyTrustedDataset", "urn:li:glossaryTerm:InventoryValuation"],
+  "tags": ["urn:li:tag:ERP", "urn:li:tag:Finance", "urn:li:tag:Inventory"],
+  "lineagePath": [
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.journal_entries,PROD)",
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.gross_margin_report,PROD)"
+  ]
+}
+```
+
+These are raw DataHub URNs, not display names — a UI wanting a friendly label (e.g.
+"Finance Controller" instead of `urn:li:corpGroup:finance-controller`) must derive it
+itself; no display-name field is provided in this contract.
+
+### 4.3 `EngineResultReference` — always copied from the deterministic engine
+
+```ts
+{
+  incidentType: IncidentType;          // e.g. "UNIT_CONVERSION_MISMATCH" | "NONE" — see src/engine/types.ts for the full enum
+  overallStatus: OverallHealthStatus;  // e.g. "HEALTHY" | "DEGRADED" | "CRITICAL" — see src/engine/types.ts for the full enum
+  primaryExposure: string;             // decimal string, e.g. "28800000.00" — always a string to preserve exact precision, never parse as float for display arithmetic
+  currency: 'IDR';
+  affectedRecordCount: number;
+  correctionTargetCount: number;
+}
+```
+
+Real example:
+
+```json
+{
+  "incidentType": "UNIT_CONVERSION_MISMATCH",
+  "overallStatus": "CRITICAL",
+  "primaryExposure": "28800000.00",
+  "currency": "IDR",
+  "affectedRecordCount": 63,
+  "correctionTargetCount": 3
+}
+```
+
+`primaryExposure` is a `Decimal`-precision string produced by the engine
+(`decimal.js`), not a JavaScript `number` — rendering it with `toLocaleString()` after
+`Number()` conversion is fine for display, but any further arithmetic on it in the UI
+layer should not be needed; the engine is the sole owner of computed figures (see
+`docs/architecture/financial-integrity-engine.md`).
+
+### 4.4 Why `rootCauseExplanation` / `businessImpactExplanation` / `remediationRationale` can be trusted
+
+These three fields are LLM-authored prose, but the orchestrator only reaches
+`INVESTIGATION_COMPLETED` after `src/agent/reconciliation.ts` mechanically verifies
+every fact the model cited (assets, owners, tags, glossary terms, lineage hops, nominal
+figures, record counts, correction targets) against the real engine result and real
+`DataHubContext` — see
+[`docs/architecture/investigation-agent.md`](../architecture/investigation-agent.md)
+§6 for the full rule table. A UI can display this prose directly without its own
+fact-checking layer; if reconciliation had failed, the record's `finalState` would be
+`MODEL_OUTPUT_INVALID` (§6) and `output` would be `null`, not a completed record with
+unverified prose.
+
+## 5. Activity log (`ActivityLogEntry[]`)
+
+One entry per tool call — engine run, each DataHub MCP call (including individual
+argument-shape retries), the model call, and the write-back. This is the raw feed for
+an "activity log" / "agent trace" UI panel, exactly as rendered today by
+`ActivityLogTable` in `app/agent/investigations/[id]/page.tsx`.
+
+```ts
+{
+  seq: number;              // 1..N, strictly sequential by real start time across ALL sources (in-process + subprocess)
+  tool: string;             // e.g. "engine.investigate", "search", "get_entities", "get_lineage", "model.generateInvestigation", "add_tags", "update_description"
+  startedAt: string;        // ISO 8601
+  finishedAt: string;       // ISO 8601
+  durationMs: number;
+  inputSummary: string;     // truncated, sanitized JSON text — never a raw secret
+  outputSummary: string;    // truncated, sanitized JSON text
+  status: 'OK' | 'ERROR';
+  errorSanitized: string | null; // present only when status is 'ERROR'; redacted (see below)
+}
+```
+
+**Individual `ERROR` entries are expected and not a sign the run failed.** Real MCP
+tool calls are probed with more than one argument shape before one validates (see the
+real example below: `add_tags` fails twice, `update_description` fails once, before
+both succeed) — a UI should render `ERROR` entries as part of the normal trace, not as
+an alarm, and should rely on `record.finalState` / `record.output.status`, not on
+"every entry succeeded", to judge whether the investigation itself succeeded.
+
+`errorSanitized` (and `outputSummary`/`inputSummary` generally) are guaranteed never to
+contain a bearer token, API key, or credential — `sanitizeError()`
+(`src/agent/activity-log.ts`) redacts `Bearer`/`Authorization` header values, any
+key/token/secret/password/credential-labeled field, and any generic 32+ character
+opaque token, before anything is stored. A UI can render these fields as-is.
+
+Real example — one `OK` model-call entry and one `ERROR` MCP-probe entry, verbatim from
+`examples/agent/conversion-error-investigation-run.json`:
+
+```json
+{
+  "seq": 7,
+  "tool": "model.generateInvestigation",
+  "startedAt": "2026-07-24T10:43:53.929Z",
+  "finishedAt": "2026-07-24T10:43:53.930Z",
+  "durationMs": 1,
+  "inputSummary": "undefined",
+  "outputSummary": "{\"schemaVersion\":\"1.0\", ... }",
+  "status": "OK",
+  "errorSanitized": null
+}
+```
+
+```json
+{
+  "seq": 8,
+  "tool": "add_tags",
+  "startedAt": "2026-07-24T10:43:59.418Z",
+  "finishedAt": "2026-07-24T10:44:00.772Z",
+  "durationMs": 1354,
+  "inputSummary": "{\"urn\": \"urn:li:dataset:(urn:li:dataPlatform:postgres,ledgerguard.public.inventory_valuation,PROD)\", \"tags\": [\"urn:li:tag:At Risk\"]}",
+  "outputSummary": "4 validation errors for call[add_tags] tag_urns Missing required argument ...",
+  "status": "ERROR",
+  "errorSanitized": "4 validation errors for call[add_tags] tag_urns Missing required argument ..."
+}
+```
+
+## 6. Incident status / failure states — what a UI renders when things go wrong
+
+When `finalState` is one of the 7 `FailureState` values, `record.output` is `null` and
+`record.error` (`ErrorStateSchema`) is populated instead:
+
+```ts
+{
+  failureState: FailureState;
+  message: string;      // short, sanitized diagnostic — safe to display
+  occurredAt: string;   // ISO 8601
+}
+```
+
+| `failureState` | Meaning for a UI | Suggested user-facing message |
+|---|---|---|
+| `MCP_UNAVAILABLE` | The DataHub MCP bridge could not be reached at all. | "DataHub is currently unreachable — try again shortly." |
+| `DATASET_NOT_FOUND` | The `triggerAsset` given does not resolve to a real DataHub dataset. | "Unknown asset — check the trigger asset name." |
+| `LINEAGE_INCOMPLETE` | Lineage traversal from the trigger asset never reached `gross_margin_report`. | "Could not trace this asset's downstream financial impact." |
+| `ENGINE_FAILED` | The deterministic engine itself threw (bad `productId`, DB unavailable, etc). | "The integrity engine could not analyze this incident." |
+| `MODEL_OUTPUT_INVALID` | The model's output failed schema validation or reconciliation (§4.4). | "The investigation could not be verified — no unverified explanation is shown." |
+| `EVIDENCE_INSUFFICIENT` | The model itself judged the evidence insufficient. | Same UX as `recommendedNextStep: COLLECT_MORE_EVIDENCE` (§4.1), except here there is no `output` at all — only `record.error.message`. |
+| `WRITEBACK_FAILED` | Evidence was sufficient and reconciliation passed, but the DataHub write-back could not be verified. | "The investigation completed but could not be recorded back to DataHub." |
+
+Every failure state still carries a full `stateHistory` (§3.2), so a UI can always show
+exactly how far the run progressed before failing, in addition to the terminal error
+message — this is a deliberate design choice; failures are not silently swallowed into
+a bare "something went wrong."
+
+## 7. Full real example
+
+The complete file
+[`examples/agent/conversion-error-investigation-run.json`](../../examples/agent/conversion-error-investigation-run.json)
+is a real, unedited `InvestigationRunRecord` for the conversion-error scenario ending in
+`INVESTIGATION_COMPLETED` / `recommendedNextStep: "REQUEST_APPROVAL"`. Regenerate it at
+any time with `npm run example:agent` (requires the demo Postgres and a bootstrapped
+DataHub instance running) — the command re-runs the real orchestrator end to end and
+restores both the database and DataHub's metadata afterward, so running it repeatedly
+never accumulates state (see also the write-back idempotency guarantees documented in
+`tests/datahub/writeback-idempotency.test.ts`).
+
+A `NO_ACTION_REQUIRED` (healthy baseline, no incident) example and a `DATASET_NOT_FOUND`
+(failure state) example both exist as live-tested cases in
+`tests/datahub/agent-orchestrator.test.ts`, but are not separately materialized as
+example files as of this document — the same schema in §3/§4/§6 fully describes their
+shape.
+
+## 8. What is explicitly NOT part of this contract yet
+
+This contract covers **investigation only** (FASE 5). It does **not** cover:
+
+- Approving, rejecting, or executing a remediation.
+- Any endpoint or schema for a remediation plan, its state machine, or its execution
+  result.
+- Any DataHub write-back beyond the investigation note + `At Risk` tag described in
+  §4.2/§5 (i.e. no `Trusted` tag, no incident resolution, no removal of `At Risk`).
+
+That workflow is FASE 6, specified separately (see the implementation plan,
+§12 "FASE 6"). Its endpoints/state machine will be documented as a follow-up to this
+file once built — the `recommendedNextStep: 'REQUEST_APPROVAL'` value described in
+§4.1 is where FASE 6 picks up, not something this contract implements. Do not build
+approval/execution UI against a schema this document doesn't define; wait for the
+FASE 6 addendum.
+
+## 9. No UI implementation in this repository from this point
+
+Per the project's current division of labor, all remaining UI/visual/responsive/design
+work is done separately (in Cursor). `app/agent/*` is a minimum test harness only (see
+its own header comments) and is not the final UI. This document exists so that the
+final UI can be built against a real, verified contract without needing to read
+`src/agent/*` source directly.
