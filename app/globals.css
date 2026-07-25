@@ -29,7 +29,9 @@ body {
   .lg-btn {
     @apply inline-flex items-center gap-2 rounded-lg border-2 border-ink bg-cream-panel px-4 py-2
       font-semibold text-ink shadow-brutal-sm transition-transform
-      hover:-translate-y-0.5 active:translate-y-0 active:shadow-none disabled:opacity-50;
+      hover:-translate-y-0.5 active:translate-y-0 active:shadow-none
+      focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink
+      disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0;
   }
 
   .lg-btn-gold {
@@ -39,4 +41,9 @@ body {
   .lg-tag {
     @apply inline-flex items-center rounded-md border-2 border-ink px-2 py-0.5 text-xs font-bold uppercase tracking-wide;
   }
+}
+
+:focus-visible {
+  outline: 2px solid #1a1d24;
+  outline-offset: 2px;
 }

@@ -15,6 +15,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ui": "vitest run tests/unit/ui",
+    "test:e2e": "playwright test",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
@@ -52,6 +54,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.54.2",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "@types/react": "^18.3.12",

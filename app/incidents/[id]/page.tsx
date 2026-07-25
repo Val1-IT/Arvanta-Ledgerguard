@@ -1,22 +1,75 @@
-// Incident detail route. In FASE 7 this becomes a tabbed view:
-// Investigation | Impact | Remediation | Resolution.
+import Link from 'next/link';
+import { getServerPool } from '../../../src/agent/server-pool';
+import { CopyIdButton } from '../../../src/ui/components/copy-id-button';
+import { ErrorState } from '../../../src/ui/components/error-state';
+import { PageHeader } from '../../../src/ui/components/page-header';
+import { StatusBadge, toneForHealth, toneForTerminalState } from '../../../src/ui/components/status-badge';
+import { formatIdrDisplay, formatIsoDateTime } from '../../../src/ui/lib/format-display';
+import { loadIncidentDetailViewModel } from '../../../src/ui/server/incident-detail';
+import { IncidentTabs } from './incident-tabs';
+
+export const dynamic = 'force-dynamic';
+
 export default async function IncidentPage({
   params
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const vm = await loadIncidentDetailViewModel(getServerPool(), id);
+
+  if (!vm) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Incident not found" />
+        <ErrorState
+          title="Investigation run not found"
+          message={`No investigation run with id ${id} exists.`}
+          action={
+            <Link href="/incidents" className="lg-btn">
+              Back to incidents
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">
-        Incident <span className="font-mono text-gold-strong">{id}</span>
-      </h1>
-      <div className="lg-panel p-6">
-        <p className="text-ink-muted">
-          Tabs (Investigation, Impact, Remediation, Resolution) are implemented in
-          FASE 7.
-        </p>
-      </div>
+      <PageHeader
+        title={vm.title}
+        description={`Detected ${formatIsoDateTime(vm.detectedAt)}. Owners: ${
+          vm.ownerLabels.length > 0 ? vm.ownerLabels.join(', ') : '—'
+        }.`}
+        meta={
+          <>
+            <StatusBadge
+              label={vm.severity}
+              tone={toneForHealth(vm.severity === 'UNKNOWN' ? 'DEGRADED' : vm.severity)}
+            />
+            <StatusBadge label={vm.status} tone={toneForTerminalState(vm.status)} />
+            {vm.recommendedNextStep ? (
+              <StatusBadge label={vm.recommendedNextStep.replaceAll('_', ' ')} tone="gold" />
+            ) : null}
+            {vm.primaryExposure ? (
+              <StatusBadge
+                label={`${formatIdrDisplay(vm.primaryExposure)} ${vm.currency ?? 'IDR'}`}
+                tone="warn"
+                title="Primary exposure from backend"
+              />
+            ) : null}
+          </>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyIdButton value={vm.id} label="Copy investigation ID" />
+            <CopyIdButton value={vm.incidentId} label="Copy incident ID" />
+          </div>
+        }
+      />
+
+      <IncidentTabs vm={vm} />
     </div>
   );
 }
