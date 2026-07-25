@@ -1,0 +1,62 @@
+# Minimal demo deployment: the LedgerGuard app + its own Postgres.
+#
+# DataHub OSS is intentionally NOT included here — it has its own official
+# quickstart lifecycle (see docs/deployment.md and package.json's `datahub:*`
+# scripts) and is provisioned as a separate, independent stack, exactly like
+# docker-compose.yml already does for local development. This file does not
+# touch that quickstart's compose project, its containers, or its volumes.
+#
+# No secrets are stored in this file. Copy .env.example to .env and fill in
+# real values before running `docker compose -f docker-compose.demo.yml up`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ledgerguard-postgres-demo
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ledgerguard
+      POSTGRES_PASSWORD: ledgerguard
+      POSTGRES_DB: ledgerguard
+    ports:
+      - '5433:5432'
+    volumes:
+      - ledgerguard_demo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ledgerguard -d ledgerguard']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ledgerguard-app-demo
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://ledgerguard:ledgerguard@postgres:5432/ledgerguard
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+volumes:
+  ledgerguard_demo_pgdata:

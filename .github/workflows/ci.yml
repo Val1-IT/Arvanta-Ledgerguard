@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+# Intentionally not run here: test:integration (needs Postgres),
+# test:datahub / test:agent (need a live DataHub OSS + MCP server), and
+# test:e2e (needs a running app + browsers). These require the full local
+# stack described in README.md and docs/deployment.md and are meant to be
+# run manually / locally rather than gating every push, so CI never goes red
+# because DataHub is unavailable in a hosted runner.
