@@ -143,13 +143,15 @@ async def run_writeback() -> WritebackReport:
 
         # --- write the tag ---------------------------------------------------
         if tag_tool:
+            # Prefer the live mcp-server-datahub shapes proven by mutation_proof.py.
             report.tag_written = await _try_call(
                 session,
                 tag_tool,
                 [
+                    {"tag_urns": [TAG_AT_RISK.urn], "entity_urns": [TARGET.urn]},
+                    {"entity_urn": TARGET.urn, "tag_urns": [TAG_AT_RISK.urn]},
                     {"urn": TARGET.urn, "tag_urns": [TAG_AT_RISK.urn]},
                     {"urn": TARGET.urn, "tags": [TAG_AT_RISK.urn]},
-                    {"entity_urn": TARGET.urn, "tag_urns": [TAG_AT_RISK.urn]},
                 ],
             )
 
@@ -160,8 +162,13 @@ async def run_writeback() -> WritebackReport:
                 session,
                 desc_tool,
                 [
-                    {"urn": TARGET.urn, "description": note_text},
+                    {
+                        "entity_urn": TARGET.urn,
+                        "operation": "replace",
+                        "description": note_text,
+                    },
                     {"entity_urn": TARGET.urn, "description": note_text},
+                    {"urn": TARGET.urn, "description": note_text},
                 ],
             )
 

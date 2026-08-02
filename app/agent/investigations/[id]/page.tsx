@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { loadInvestigationRun } from '../../../../src/db/repositories/investigation-runs';
 import { getServerPool } from '../../../../src/agent/server-pool';
 import type { ActivityLogEntry } from '../../../../src/agent/types';
+import { labelModelSource } from '../../../../src/ui/lib/status-labels';
 
 // ---------------------------------------------------------------------------
 // Read-only view of one persisted investigation run (src/agent/orchestrator.ts
@@ -182,7 +183,7 @@ export default async function InvestigationRunPage({ params }: { params: Promise
             {record.output.provenance ? (
               <p className="mb-2 text-xs text-ink-muted">
                 DataHub context: {record.output.provenance.datahubSource === 'LIVE_MCP' ? 'Live MCP' : 'Demo context fallback'}
-                {' · '}Model narration: {record.output.provenance.modelSource === 'ANTHROPIC' ? 'Anthropic' : 'Deterministic template'}
+                {' · '}Model narration: {labelModelSource(record.output.provenance.modelSource)}
                 {' · '}Fallback used: {record.output.provenance.fallbackUsed ? 'Yes' : 'No'}
               </p>
             ) : null}

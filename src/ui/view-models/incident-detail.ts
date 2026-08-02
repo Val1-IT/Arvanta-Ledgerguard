@@ -85,7 +85,7 @@ export const IncidentDetailViewModelSchema = z.object({
     provenance: z
       .object({
         datahubSource: z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT']),
-        modelSource: z.enum(['ANTHROPIC', 'DETERMINISTIC_TEMPLATE']),
+        modelSource: z.enum(['ANTHROPIC', 'OPENAI', 'DETERMINISTIC_TEMPLATE']),
         fallbackUsed: z.boolean()
       })
       .nullable(),

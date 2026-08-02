@@ -131,7 +131,7 @@ export type DataHubContext = z.infer<typeof DataHubContextSchema>;
 export const DataHubSourceSchema = z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT']);
 export type DataHubSource = z.infer<typeof DataHubSourceSchema>;
 
-export const ModelSourceSchema = z.enum(['ANTHROPIC', 'DETERMINISTIC_TEMPLATE']);
+export const ModelSourceSchema = z.enum(['ANTHROPIC', 'OPENAI', 'DETERMINISTIC_TEMPLATE']);
 export type ModelSource = z.infer<typeof ModelSourceSchema>;
 
 export const InvestigationProvenanceSchema = z.object({

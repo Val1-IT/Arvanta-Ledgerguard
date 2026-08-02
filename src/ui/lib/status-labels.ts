@@ -48,6 +48,12 @@ const DATAHUB_STATUS_LABELS: Record<string, string> = {
   NOT_CONFIGURED: 'Not configured'
 };
 
+const MODEL_SOURCE_LABELS: Record<string, string> = {
+  ANTHROPIC: 'Anthropic',
+  OPENAI: 'OpenAI',
+  DETERMINISTIC_TEMPLATE: 'Deterministic template'
+};
+
 const NEXT_STEP_LABELS: Record<string, string> = {
   REQUEST_APPROVAL: 'Request approval',
   ESCALATE_TO_OWNER: 'Escalate to owner',
@@ -232,4 +238,9 @@ export function labelTable(table: string | null | undefined): string {
 export function labelField(field: string | null | undefined): string {
   if (!field) return '—';
   return FIELD_LABELS[field] ?? humanizeToken(field);
+}
+
+export function labelModelSource(source: string | null | undefined): string {
+  if (!source) return '—';
+  return MODEL_SOURCE_LABELS[source] ?? humanizeToken(source);
 }

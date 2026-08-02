@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-08-02T14:30:41.132Z",
+  "actor": "judge-proof-actor",
+  "investigationId": "21bbeed3-a2fb-458c-ba49-e7547a55841d",
+  "planId": "70627865-bf03-49fa-baba-43b5c6951609",
+  "datahubSource": "LIVE_MCP",
+  "fallbackUsed": false,
+  "modelSource": "OPENAI",
+  "remediationState": "RESOLVED",
+  "verificationStatus": "PASS",
+  "datahubWritebackStatus": "SYNCED",
+  "activityLogPath": "examples/judge-proof/mcp-activity-log.jsonl"
+}

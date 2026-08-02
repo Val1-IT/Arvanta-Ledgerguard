@@ -7,7 +7,7 @@ Synthetic ERP demo only. Do not point `DATABASE_URL` at Arvanta or production da
 - `DEMO_MODE` — must be exactly `true` for Simulate / Reset / remediation mutations
 - `DATABASE_URL` — demo Postgres (compose default host port `5433`)
 - `DATAHUB_GMS_URL` / `DATAHUB_GMS_TOKEN` — optional for live metadata; write-back may fail without them
-- `ANTHROPIC_API_KEY` — optional; without it the UI uses the deterministic test narrator
+- `LLM_PROVIDER` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — optional live narrator; without a live key the UI uses the deterministic test narrator
 - `LLM_USE_TEMPLATE_FALLBACK` — optional local/CI fallback
 
 No demo login credentials: the UI has no auth surface.

@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { describeLiveModelCredentialStatus } from '../src/agent/model-factory';
 import { makePool } from '../src/db/client';
 import { getRuntimePolicy } from '../src/runtime/runtime-policy';
 
@@ -60,7 +61,11 @@ async function main(): Promise<void> {
     record('Seed/demo tables available', requiredTables.every((table) => found.has(table)), `Found ${found.size}/${requiredTables.length} required tables.`);
 
     const migrationFiles = readdirSync(path.join(root, 'drizzle')).filter((file) => /^\d+_.*\.sql$/.test(file));
-    const applied = await pool.query<{ count: string }>('select count(*)::text as count from __drizzle_migrations');
+    // drizzle-orm/node-postgres migrator records history in schema "drizzle"
+    // (table drizzle.__drizzle_migrations), not public.__drizzle_migrations.
+    const applied = await pool.query<{ count: string }>(
+      'select count(*)::text as count from drizzle.__drizzle_migrations'
+    );
     const appliedCount = Number(applied.rows[0]?.count ?? 0);
     record(
       'Migrations available and applied',
@@ -91,7 +96,8 @@ async function main(): Promise<void> {
   }
 
   if (policy.requireLiveModel) {
-    record('Live model configured', Boolean(process.env.ANTHROPIC_API_KEY?.trim()), 'Set ANTHROPIC_API_KEY because REQUIRE_LIVE_MODEL=true.');
+    const liveModel = describeLiveModelCredentialStatus(policy);
+    record('Live model configured', liveModel.ok, liveModel.detail);
   } else {
     record('Model policy', true, 'Live model is optional; proof artifacts will state the selected model source.');
   }

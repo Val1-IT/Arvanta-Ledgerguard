@@ -2,11 +2,10 @@ import type { InvestigationFactsForModel } from './prompts/investigation-v1';
 import type { ModelInvestigationOutput, ModelSource } from './types';
 
 // ---------------------------------------------------------------------------
-// Single-provider model abstraction (FASE 5 requirement: "gunakan satu
-// provider utama", no multi-provider abstraction). generateInvestigation must
-// return a value that still has to pass Zod validation and the reconciliation
-// layer before it is trusted — this interface makes no promise about output
-// correctness, only about the call shape.
+// Investigation narrator abstraction. Exactly one provider is selected per
+// run via createInvestigationModel() (Anthropic, OpenAI, or deterministic
+// template) — no multi-provider retry or silent failover. generateInvestigation
+// must still pass Zod validation and reconciliation before it is trusted.
 // ---------------------------------------------------------------------------
 
 export interface InvestigationModel {

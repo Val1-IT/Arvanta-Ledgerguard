@@ -124,11 +124,38 @@ export async function executeRemediationPlanAction(input: {
 }): Promise<RemediationActionResult> {
   try {
     assertDemoMode('Execute remediation plan');
-    const plan = await executeRemediationPlan(
+    let plan = await executeRemediationPlan(
       { planId: input.planId, expectedVersion: input.expectedVersion },
       { pool: getServerPool() }
     );
+
+    // Best-effort DataHub sync immediately after a verified ERP restore so the
+    // Resolution tab does not stay on "Not attempted" when GMS/MCP is healthy.
+    if (plan.state === 'RESOLVED' && !plan.datahubWriteback) {
+      plan = await writebackRemediationResolution({ planId: plan.id }, { pool: getServerPool() });
+    }
+
     revalidateIncident(input.investigationId);
+    const writeback = plan.datahubWriteback?.outcome;
+    if (plan.state === 'RESOLVED' && writeback === 'SYNCED') {
+      return {
+        ok: true,
+        planId: plan.id,
+        state: plan.state,
+        version: plan.version,
+        message: 'Corrections applied and verified. ERP restored; DataHub metadata synced.'
+      };
+    }
+    if (plan.state === 'RESOLVED' && writeback === 'FAILED') {
+      return {
+        ok: true,
+        planId: plan.id,
+        state: plan.state,
+        version: plan.version,
+        message:
+          'Corrections applied and verified. ERP restored, but DataHub write-back failed — use Retry DataHub write-back.'
+      };
+    }
     return {
       ok: true,
       planId: plan.id,

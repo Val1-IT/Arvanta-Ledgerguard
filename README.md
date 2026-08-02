@@ -296,23 +296,45 @@ Judging is fail-closed: the investigation must read context through live
 DataHub MCP, and a missing MCP connection, dataset, lineage, or MCP write-back
 is a visible failure rather than a completed incident. The UI persists and
 shows whether context came from `LIVE_MCP` or `STATIC_DEMO_CONTEXT`, and whether
-the narration came from Anthropic or the deterministic template.
+narration came from Anthropic, OpenAI, or the deterministic template. The LLM
+only writes narrative/recommendation text — every financial figure still comes
+from the deterministic engine.
+
+`LLM_PROVIDER` selects the narrator (`anthropic`, `openai`, or `deterministic`).
+OpenAI and Anthropic are both supported live providers; the deterministic
+template is the offline/development fallback and cannot satisfy
+`REQUIRE_LIVE_MODEL=true`.
+
+Judging with OpenAI:
 
 ```env
 DEMO_MODE=true
 JUDGE_MODE=true
 ALLOW_DEMO_FALLBACK=false
 REQUIRE_LIVE_MODEL=true
+LLM_PROVIDER=openai
+OPENAI_API_KEY=...
+DATAHUB_GMS_URL=...
+```
+
+Judging with Anthropic:
+
+```env
+DEMO_MODE=true
+JUDGE_MODE=true
+ALLOW_DEMO_FALLBACK=false
+REQUIRE_LIVE_MODEL=true
+LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=...
 DATAHUB_GMS_URL=...
 ```
 
 Before a judging session, run `npm run judge:preflight`. It checks the isolated
 demo PostgreSQL schema, DataHub MCP reads/lineage, mutation tools with a safe
-restore, and the live-model requirement. Then run `npm run proof:judge-flow`
-to reset only the synthetic demo database and produce sanitized artifacts in
-`examples/judge-proof/`. The command does not manufacture a success artifact:
-it exits non-zero if any live step fails.
+restore, and the live-model requirement for the configured provider. Then run
+`npm run proof:judge-flow` to reset only the synthetic demo database and produce
+sanitized artifacts in `examples/judge-proof/`. The command does not manufacture
+a success artifact: it exits non-zero if any live step fails.
 
 ## Test coverage
 
@@ -334,8 +356,9 @@ DataHub MCP 45/46 (1 intentionally skipped — see below), agent 17/18 (same
 skip), E2E 20/20 (16 additional cases are intentionally scoped to the desktop
 project only and skipped on tablet/mobile). The one skipped case in both the
 DataHub MCP and agent suites is the live model smoke test, which only runs
-when a real LLM provider API key is configured. These counts will drift as
-the suite grows — run the commands above for current numbers.
+when `RUN_LIVE_MODEL_TEST=true` and the active `LLM_PROVIDER` credential is
+configured. These counts will drift as the suite grows — run the commands
+above for current numbers.
 
 ## Repository structure
 
@@ -361,9 +384,10 @@ docker-compose.yml  Demo PostgreSQL only (DataHub is provisioned separately)
   horizontal scaling, no multi-tenant isolation.
 - **DataHub OSS** is resource-heavy (~8 GB RAM, ~13 GB disk) — this is a
   property of DataHub's own quickstart, not something LedgerGuard can reduce.
-- The **live model-provider smoke test** may be gated or skipped in
-  environments without a configured API key; the deterministic template
-  narrator is the offline fallback.
+- The **live model-provider smoke test** is opt-in (`RUN_LIVE_MODEL_TEST=true`)
+  and skipped without the active provider API key (Anthropic or OpenAI);
+  the deterministic template narrator is the offline fallback. Unit tests mock
+  OpenAI/Anthropic SDKs and do not prove a live provider call.
 - LedgerGuard is **not a substitute for audit or accounting review** — it
   surfaces and helps remediate a specific class of data-integrity error; it
   does not certify financial statements.

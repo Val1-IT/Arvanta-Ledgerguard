@@ -247,8 +247,13 @@ async def _do_resolve(payload: Dict[str, Any]) -> Dict[str, Any]:
                     session,
                     desc_tool,
                     [
-                        {"urn": dataset.urn, "description": note_text},
+                        {
+                            "entity_urn": dataset.urn,
+                            "operation": "replace",
+                            "description": note_text,
+                        },
                         {"entity_urn": dataset.urn, "description": note_text},
+                        {"urn": dataset.urn, "description": note_text},
                     ],
                 )
 
@@ -320,13 +325,16 @@ async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
 
             tag_written = False
             if tag_tool:
+                # Argument shapes must match the live mcp-server-datahub contract
+                # proven by mutation_proof.py (entity_urns + tag_urns).
                 tag_written = await _try_call(
                     session,
                     tag_tool,
                     [
+                        {"tag_urns": [TAG_AT_RISK.urn], "entity_urns": [dataset.urn]},
+                        {"entity_urn": dataset.urn, "tag_urns": [TAG_AT_RISK.urn]},
                         {"urn": dataset.urn, "tag_urns": [TAG_AT_RISK.urn]},
                         {"urn": dataset.urn, "tags": [TAG_AT_RISK.urn]},
-                        {"entity_urn": dataset.urn, "tag_urns": [TAG_AT_RISK.urn]},
                     ],
                 )
 
@@ -337,8 +345,13 @@ async def _do_writeback(payload: Dict[str, Any]) -> Dict[str, Any]:
                     session,
                     desc_tool,
                     [
-                        {"urn": dataset.urn, "description": note_text},
+                        {
+                            "entity_urn": dataset.urn,
+                            "operation": "replace",
+                            "description": note_text,
+                        },
                         {"entity_urn": dataset.urn, "description": note_text},
+                        {"urn": dataset.urn, "description": note_text},
                     ],
                 )
 

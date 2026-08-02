@@ -7,7 +7,9 @@ const original = {
   JUDGE_MODE: process.env.JUDGE_MODE,
   ALLOW_DEMO_FALLBACK: process.env.ALLOW_DEMO_FALLBACK,
   REQUIRE_LIVE_MODEL: process.env.REQUIRE_LIVE_MODEL,
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  LLM_PROVIDER: process.env.LLM_PROVIDER
 };
 
 function setEnv(key: keyof typeof original, value: string | undefined): void {
@@ -43,14 +45,18 @@ describe('runtime policy', () => {
 
 describe('investigation model factory', () => {
   it('fails explicitly when a live model is required but no key exists', () => {
+    setEnv('LLM_PROVIDER', undefined);
     setEnv('ANTHROPIC_API_KEY', undefined);
+    setEnv('OPENAI_API_KEY', undefined);
     expect(() => createInvestigationModel({ judgeMode: true, allowDemoFallback: false, requireLiveModel: true })).toThrow(
-      'ANTHROPIC_API_KEY is required because live model mode is enabled.'
+      /live model API key is required/i
     );
   });
 
   it('selects an explicitly labelled deterministic narrator when live model is optional', () => {
+    setEnv('LLM_PROVIDER', undefined);
     setEnv('ANTHROPIC_API_KEY', undefined);
+    setEnv('OPENAI_API_KEY', undefined);
     const selection = createInvestigationModel({ judgeMode: false, allowDemoFallback: true, requireLiveModel: false });
     expect(selection.model).toBeInstanceOf(DeterministicTestModel);
     expect(selection.modelSource).toBe('DETERMINISTIC_TEMPLATE');

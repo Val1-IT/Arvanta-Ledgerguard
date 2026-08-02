@@ -1,4 +1,6 @@
 import { PRODUCT } from '../../src/domain/constants';
+import { createInvestigationModel } from '../../src/agent/model-factory';
+import { labelModelSource } from '../../src/ui/lib/status-labels';
 import { triggerInvestigation } from './actions';
 import { LookupForm } from './lookup-form';
 
@@ -12,7 +14,16 @@ import { LookupForm } from './lookup-form';
 // ---------------------------------------------------------------------------
 
 export default function AgentPage() {
-  const usingRealModel = Boolean(process.env.ANTHROPIC_API_KEY);
+  let modelLabel = 'Deterministic test provider';
+  try {
+    const selection = createInvestigationModel();
+    modelLabel =
+      selection.modelSource === 'DETERMINISTIC_TEMPLATE'
+        ? 'Deterministic test provider'
+        : `${labelModelSource(selection.modelSource)} (live)`;
+  } catch {
+    modelLabel = 'Misconfigured live model';
+  }
 
   return (
     <div className="space-y-6">
@@ -27,9 +38,7 @@ export default function AgentPage() {
       <div className="lg-panel space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h2 className="font-bold">Run a new investigation</h2>
-          <span className="lg-tag border-ink text-ink-muted">
-            Model: {usingRealModel ? 'Anthropic (live)' : 'Deterministic test provider'}
-          </span>
+          <span className="lg-tag border-ink text-ink-muted">Model: {modelLabel}</span>
         </div>
         <form action={triggerInvestigation} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="text-sm">

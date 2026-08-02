@@ -16,6 +16,7 @@ import {
   labelExposureMethod,
   labelField,
   labelInvestigationState,
+  labelModelSource,
   labelPlanState,
   labelProvenanceType,
   labelTable,
@@ -160,9 +161,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                   <div>
                     <dt className="text-ink-muted">Model narration</dt>
                     <dd className="font-semibold">
-                      {vm.investigation.provenance.modelSource === 'ANTHROPIC'
-                        ? 'Anthropic'
-                        : 'Deterministic template'}
+                      {labelModelSource(vm.investigation.provenance.modelSource)}
                     </dd>
                   </div>
                   <div>

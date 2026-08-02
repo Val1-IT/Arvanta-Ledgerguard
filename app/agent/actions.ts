@@ -6,13 +6,10 @@ import { createInvestigationModel } from '../../src/agent/model-factory';
 import { getServerPool } from '../../src/agent/server-pool';
 
 // ---------------------------------------------------------------------------
-// Server action backing the minimum test UI (app/agent/page.tsx). Picks the
-// real Anthropic-backed model when ANTHROPIC_API_KEY is configured, otherwise
-// falls back to the deterministic test provider — the same selection a caller
-// would make outside the UI, not a UI-specific shortcut. This never touches
-// remediation: runInvestigation only investigates and writes an "At Risk"
-// tag + note back to DataHub (src/agent/orchestrator.ts), it does not execute
-// any correction.
+// Server action backing the minimum test UI (app/agent/page.tsx). Uses
+// createInvestigationModel() (LLM_PROVIDER + Anthropic/OpenAI keys, else
+// deterministic template). This never touches remediation: runInvestigation
+// only investigates and writes an "At Risk" tag + note back to DataHub.
 // ---------------------------------------------------------------------------
 
 export async function triggerInvestigation(formData: FormData): Promise<void> {
