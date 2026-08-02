@@ -45,7 +45,7 @@ test.describe('LedgerGuard full remediation path', () => {
 
     await executeRemediation(page);
     await expect(page.getByTestId('resolution-headline')).toBeVisible();
-    await expect(page.getByText(/Verification Pass|Verification PASS|ERP restored/i).first()).toBeVisible();
+    await expect(page.getByText(/Verification Passed|ERP restored/i).first()).toBeVisible();
     await expect(page.getByText(/DataHub/i).first()).toBeVisible();
 
     // Write-back may SYNC or FAIL depending on DataHub; both are valid UI states.

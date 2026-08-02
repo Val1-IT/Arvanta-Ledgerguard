@@ -179,6 +179,13 @@ export default async function InvestigationRunPage({ params }: { params: Promise
 
           <div>
             <h3 className="text-sm font-semibold">DataHub context</h3>
+            {record.output.provenance ? (
+              <p className="mb-2 text-xs text-ink-muted">
+                DataHub context: {record.output.provenance.datahubSource === 'LIVE_MCP' ? 'Live MCP' : 'Demo context fallback'}
+                {' · '}Model narration: {record.output.provenance.modelSource === 'ANTHROPIC' ? 'Anthropic' : 'Deterministic template'}
+                {' · '}Fallback used: {record.output.provenance.fallbackUsed ? 'Yes' : 'No'}
+              </p>
+            ) : null}
             <dl className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
               <div>
                 <dt className="text-ink-muted">Assets read</dt>

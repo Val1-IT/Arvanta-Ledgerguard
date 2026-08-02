@@ -125,6 +125,22 @@ export const DataHubContextSchema = z.object({
 });
 export type DataHubContext = z.infer<typeof DataHubContextSchema>;
 
+// Persisted provenance is assigned by runtime code, never by the model. It is
+// intentionally separate from DataHubContext so a static development fallback
+// cannot be rendered as a successful live MCP read.
+export const DataHubSourceSchema = z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT']);
+export type DataHubSource = z.infer<typeof DataHubSourceSchema>;
+
+export const ModelSourceSchema = z.enum(['ANTHROPIC', 'DETERMINISTIC_TEMPLATE']);
+export type ModelSource = z.infer<typeof ModelSourceSchema>;
+
+export const InvestigationProvenanceSchema = z.object({
+  datahubSource: DataHubSourceSchema,
+  modelSource: ModelSourceSchema,
+  fallbackUsed: z.boolean()
+});
+export type InvestigationProvenance = z.infer<typeof InvestigationProvenanceSchema>;
+
 // ---------------------------------------------------------------------------
 // Engine result reference — copied programmatically from
 // IncidentInvestigationReport after the model finishes. The model never
@@ -212,6 +228,7 @@ export const InvestigationOutputSchema = z.object({
   rootCauseExplanation: z.string(),
   businessImpactExplanation: z.string(),
   datahubContext: DataHubContextSchema,
+  provenance: InvestigationProvenanceSchema.optional(),
   engineResultReference: EngineResultReferenceSchema,
   remediationRationale: z.string(),
   recommendedNextStep: RecommendedNextStepSchema,

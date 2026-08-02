@@ -24,7 +24,7 @@ export async function triggerInvestigation(formData: FormData): Promise<void>
 
 It reads five string fields off `FormData` (`incidentId`, `productId`, `triggerAsset`,
 `requestedBy`, `mode`), runs `runInvestigation()` against the real database and the
-model picked by `pickModel()` (`AnthropicInvestigationModel` if
+model picked by `createInvestigationModel()` (`AnthropicInvestigationModel` if
 `process.env.ANTHROPIC_API_KEY` is set, otherwise `DeterministicTestModel`), and on
 success calls `redirect('/agent/investigations/${record.investigationId}')`. It has no
 return value — a caller cannot get the result back as a plain value from this action;

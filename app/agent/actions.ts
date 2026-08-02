@@ -2,9 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { runInvestigation } from '../../src/agent/orchestrator';
-import { AnthropicInvestigationModel } from '../../src/agent/model-anthropic';
-import { DeterministicTestModel } from '../../src/agent/model-test';
-import type { InvestigationModel } from '../../src/agent/model';
+import { createInvestigationModel } from '../../src/agent/model-factory';
 import { getServerPool } from '../../src/agent/server-pool';
 
 // ---------------------------------------------------------------------------
@@ -17,10 +15,6 @@ import { getServerPool } from '../../src/agent/server-pool';
 // any correction.
 // ---------------------------------------------------------------------------
 
-function pickModel(): InvestigationModel {
-  return process.env.ANTHROPIC_API_KEY ? new AnthropicInvestigationModel() : new DeterministicTestModel();
-}
-
 export async function triggerInvestigation(formData: FormData): Promise<void> {
   const rawInput = {
     incidentId: String(formData.get('incidentId') ?? ''),
@@ -30,6 +24,9 @@ export async function triggerInvestigation(formData: FormData): Promise<void> {
     mode: String(formData.get('mode') ?? 'TEST')
   };
 
-  const record = await runInvestigation(rawInput, { pool: getServerPool(), model: pickModel() });
+  const record = await runInvestigation(rawInput, {
+    pool: getServerPool(),
+    ...createInvestigationModel()
+  });
   redirect(`/agent/investigations/${record.investigationId}`);
 }

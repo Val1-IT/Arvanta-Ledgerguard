@@ -14,8 +14,8 @@ export function DemoBanner() {
         <span>Demo environment — synthetic ERP data only.</span>
       ) : (
         <span>
-          Demo environment — synthetic ERP data only. Mutating controls are disabled because{' '}
-          <span className="font-mono">DEMO_MODE</span> is not active.
+          Demo environment — synthetic ERP data only. Mutating controls are disabled because demo mode is
+          not active.
         </span>
       )}
     </div>

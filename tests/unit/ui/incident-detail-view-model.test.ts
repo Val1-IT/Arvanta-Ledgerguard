@@ -96,6 +96,25 @@ describe('incident detail view model', () => {
     expect(owner?.urn).toContain('urn:li:corpGroup:finance-controller');
   });
 
+  it('exposes stored provenance and never infers Live MCP for a fallback record', () => {
+    const fallback: InvestigationRunRecord = {
+      ...run,
+      output: run.output
+        ? {
+            ...run.output,
+            provenance: {
+              datahubSource: 'STATIC_DEMO_CONTEXT',
+              modelSource: 'DETERMINISTIC_TEMPLATE',
+              fallbackUsed: true
+            }
+          }
+        : null
+    };
+    const vm = buildIncidentDetailViewModel({ run: fallback, engineReport: engine, remediationPlan: null });
+    expect(vm.investigation.provenance?.datahubSource).toBe('STATIC_DEMO_CONTEXT');
+    expect(vm.investigation.provenance?.fallbackUsed).toBe(true);
+  });
+
   it('enables generate-plan action for completed REQUEST_APPROVAL runs in demo mode', () => {
     const vm = buildIncidentDetailViewModel({
       run,
@@ -133,7 +152,19 @@ describe('incident detail view model', () => {
       createdAt: '2026-07-24T00:00:00.000Z',
       updatedAt: '2026-07-24T01:00:00.000Z'
     };
-    const latest = { ...older, id: 'plan-new', state: 'DRAFT' as const, version: 1, approvalAction: null, approvedBy: null, approvedAt: null, createdAt: '2026-07-24T02:00:00.000Z', updatedAt: '2026-07-24T02:00:00.000Z' };
+    const sampleCorrection = engine.proposedCorrections[0];
+    const latest = {
+      ...older,
+      id: 'plan-new',
+      state: 'DRAFT' as const,
+      version: 1,
+      approvalAction: null,
+      approvedBy: null,
+      approvedAt: null,
+      createdAt: '2026-07-24T02:00:00.000Z',
+      updatedAt: '2026-07-24T02:00:00.000Z',
+      proposedCorrections: sampleCorrection ? [sampleCorrection] : []
+    };
     const vm = buildIncidentDetailViewModel({
       run,
       engineReport: engine,
@@ -144,7 +175,10 @@ describe('incident detail view model', () => {
     expect(vm.remediation.planHistory).toHaveLength(2);
     expect(vm.remediation.planHistory[0]?.planId).toBe('plan-new');
     expect(vm.remediation.planHistory[0]?.isActive).toBe(true);
+    expect(vm.remediation.planHistory[0]?.proposedCorrections).toHaveLength(1);
+    expect(vm.remediation.planHistory[0]?.proposedCorrections[0]?.action).toBe(sampleCorrection?.action);
     expect(vm.remediation.planHistory[1]?.isActive).toBe(false);
+    expect(vm.remediation.planHistory[1]?.proposedCorrections).toHaveLength(0);
     expect(vm.resolution.semantics.erpRestored).toBe(false);
   });
 
@@ -198,4 +232,3 @@ describe('incident detail view model', () => {
     expect(vm.remediation.planHistory[0]?.verificationStatus).toBe('PASS');
   });
 });
-

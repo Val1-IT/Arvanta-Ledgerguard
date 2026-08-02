@@ -23,7 +23,7 @@ describe('overview view model', () => {
     expect(vm.dataHealth).toBe('HEALTHY');
     expect(vm.activeIncidentCount).toBe(0);
     expect(vm.inventoryValueLabel).toContain('72.000.000');
-    expect(vm.grossMarginLabel).toContain('33,3333');
+    expect(vm.grossMarginLabel).toContain('33,33');
   });
 
   it('builds an at-risk overview state from critical incidents', () => {

@@ -308,6 +308,7 @@ export function buildIncidentDetailViewModel(parts: {
         glossary: labeled(run.output?.datahubContext.glossaryTerms ?? []),
         lineage: labeled(run.output?.datahubContext.lineagePath ?? [])
       },
+      provenance: run.output?.provenance ?? null,
       stateHistory: run.stateHistory,
       activityLog: activity.activityLog,
       activityLogSource: activity.activityLogSource,
@@ -354,7 +355,8 @@ export function buildIncidentDetailViewModel(parts: {
         updatedAt: plan.updatedAt,
         executedAt: plan.executedAt,
         verificationStatus: plan.verification?.result.overallStatus ?? null,
-        isActive: remediationPlan?.id === plan.id
+        isActive: remediationPlan?.id === plan.id,
+        proposedCorrections: plan.proposedCorrections
       }))
     },
 

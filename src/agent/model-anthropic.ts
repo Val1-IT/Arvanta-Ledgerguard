@@ -117,6 +117,7 @@ export interface AnthropicInvestigationModelOptions {
 }
 
 export class AnthropicInvestigationModel implements InvestigationModel {
+  readonly source = 'ANTHROPIC' as const;
   private readonly client: Anthropic;
   private readonly model: string;
 
@@ -126,7 +127,7 @@ export class AnthropicInvestigationModel implements InvestigationModel {
       throw new Error('ANTHROPIC_API_KEY is not set; the real investigation model cannot be constructed.');
     }
     this.client = new Anthropic({ apiKey });
-    this.model = options.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+    this.model = options.model ?? process.env.ANTHROPIC_MODEL ?? process.env.LLM_MODEL ?? DEFAULT_MODEL;
   }
 
   async generateInvestigation(facts: InvestigationFactsForModel): Promise<ModelInvestigationOutput> {

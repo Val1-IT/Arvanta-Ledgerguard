@@ -260,6 +260,7 @@ npm run test               # unit tests — no database required
 npm run test:integration   # requires a running, migrated, seeded database
 npm run test:datahub       # requires a running DataHub OSS + MCP server
 npm run test:agent         # agent unit + live orchestrator/model tests
+npm run test:e2e           # Playwright full incident lifecycle
 npm run build
 ```
 
@@ -279,6 +280,39 @@ See [`.env.example`](.env.example) for the full, commented list, split into
 **required** (`DEMO_MODE`, `DATABASE_URL`) and **optional** (DataHub connection,
 model provider) sections. No real values are shown here or in the file itself —
 only variable names and explanations.
+
+### Runtime modes
+
+Local UI development can keep the deterministic narrator and the clearly marked
+static context fallback available when DataHub is offline:
+
+```env
+JUDGE_MODE=false
+ALLOW_DEMO_FALLBACK=true
+REQUIRE_LIVE_MODEL=false
+```
+
+Judging is fail-closed: the investigation must read context through live
+DataHub MCP, and a missing MCP connection, dataset, lineage, or MCP write-back
+is a visible failure rather than a completed incident. The UI persists and
+shows whether context came from `LIVE_MCP` or `STATIC_DEMO_CONTEXT`, and whether
+the narration came from Anthropic or the deterministic template.
+
+```env
+DEMO_MODE=true
+JUDGE_MODE=true
+ALLOW_DEMO_FALLBACK=false
+REQUIRE_LIVE_MODEL=true
+ANTHROPIC_API_KEY=...
+DATAHUB_GMS_URL=...
+```
+
+Before a judging session, run `npm run judge:preflight`. It checks the isolated
+demo PostgreSQL schema, DataHub MCP reads/lineage, mutation tools with a safe
+restore, and the live-model requirement. Then run `npm run proof:judge-flow`
+to reset only the synthetic demo database and produce sanitized artifacts in
+`examples/judge-proof/`. The command does not manufacture a success artifact:
+it exits non-zero if any live step fails.
 
 ## Test coverage
 

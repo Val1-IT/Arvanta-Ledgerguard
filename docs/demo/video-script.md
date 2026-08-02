@@ -7,8 +7,8 @@ Do not use the phrase **"fully autonomous"** anywhere in narration or on-screen
 text. LedgerGuard requires human approval before any remediation executes;
 describe it as agent-assisted, human-approved, or similar.
 
-Prep before recording: `npm run db:reset`, confirm DataHub is up
-(`npm run datahub:status`), confirm the app is on a known port, and do one
+Prep before recording: set the judging environment, run `npm run judge:preflight`,
+then `npm run proof:judge-flow`. Confirm the app is on a known port and do one
 silent dry run of the full flow so you know current UI wording and timings.
 
 ---
@@ -54,16 +54,16 @@ through the DataHub MCP Server, not just from its own database. It finds the
 root cause: CARTON should convert at 12, it's reading 10."
 
 **On-screen actions:** Point out the DataHub context panel / MCP activity log
-and the lineage graph if visible; highlight "root cause" and "evidence
-sufficiency" indicators.
+and the lineage graph if visible; highlight the compact `Live MCP` provenance,
+"root cause", and "evidence sufficiency" indicators.
 
 **Expected status:** Investigation complete, root cause identified, DataHub
 tag shows "At Risk" with an explanatory note (visible if you check the
 DataHub UI directly, optional).
 
-**Backup path if DataHub is slow:** If MCP calls lag, cut to a pre-recorded
-pass or narrate over the loading state ("this is a live call to a self-hosted
-DataHub instance") rather than waiting silently on camera.
+**If DataHub fails:** Do not present a completed fallback in judging mode. Show
+the visible failure, repair the live service, then restart the flow; use only a
+recorded successful live pass in the final edit.
 
 ## 1:05–1:35 — Impact
 

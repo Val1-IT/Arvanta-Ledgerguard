@@ -7,6 +7,7 @@ import { PageHeader } from '../../src/ui/components/page-header';
 import { Panel } from '../../src/ui/components/panel';
 import { StatusBadge, toneForTerminalState } from '../../src/ui/components/status-badge';
 import { formatIdrDisplay, formatIsoDateTime } from '../../src/ui/lib/format-display';
+import { labelInvestigationState } from '../../src/ui/lib/status-labels';
 import { listInvestigationRuns } from '../../src/ui/server/queries';
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,10 @@ export default async function IncidentsPage() {
                       {run.incidentId}
                     </Link>
                     <div className="flex flex-wrap gap-2">
-                      <StatusBadge label={run.finalState} tone={toneForTerminalState(run.finalState)} />
+                      <StatusBadge
+                        label={labelInvestigationState(run.finalState)}
+                        tone={toneForTerminalState(run.finalState)}
+                      />
                       {run.output?.engineResultReference.primaryExposure ? (
                         <StatusBadge
                           label={formatIdrDisplay(run.output.engineResultReference.primaryExposure)}

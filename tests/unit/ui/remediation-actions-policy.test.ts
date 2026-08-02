@@ -60,7 +60,7 @@ describe('remediation available actions policy', () => {
         plan: plan({ state: 'PENDING_APPROVAL' }),
         actions
       })
-    ).toMatch(/DEMO_MODE=true/);
+    ).toMatch(/demo mode/i);
   });
 
   it('exposes distinct approve / reject / keep-frozen while pending approval', () => {

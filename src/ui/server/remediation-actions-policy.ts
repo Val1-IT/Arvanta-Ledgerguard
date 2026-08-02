@@ -73,7 +73,7 @@ export function remediationActionsDisabledReason(parts: {
 }): string | null {
   if (Object.values(parts.actions).some(Boolean)) return null;
   if (!parts.demoModeEnabled) {
-    return 'Mutating remediation actions require DEMO_MODE=true.';
+    return 'Remediation actions are available only while demo mode is enabled.';
   }
   if (!parts.investigationCompleted) {
     return 'Remediation actions unlock after the investigation completes successfully.';
@@ -87,7 +87,7 @@ export function remediationActionsDisabledReason(parts: {
     }
   }
   if (parts.plan?.state === 'EXECUTING' || parts.plan?.state === 'VERIFYING') {
-    return `Plan is currently ${parts.plan.state}. Wait for the backend to finish, then refresh.`;
+    return `Plan is currently ${parts.plan.state === 'EXECUTING' ? 'executing' : 'verifying'}. Wait for the backend to finish, then refresh.`;
   }
   return 'No remediation actions are available for the current plan state.';
 }
@@ -109,26 +109,27 @@ export function remediationDecisionCopy(
 
   switch (plan.state) {
     case 'DRAFT':
-      return 'Plan is in DRAFT. Submit it for approval when the proposed corrections look correct.';
+      return 'Plan is in draft. Submit it for approval when the proposed corrections look correct.';
     case 'PENDING_APPROVAL':
-      return 'Plan is PENDING_APPROVAL. Choose Approve, Reject, or Keep reports frozen.';
+      return 'Plan is pending approval. Choose Approve, Reject, or Keep reports frozen.';
     case 'APPROVED':
-      return 'Plan is APPROVED. Execute applies corrections in one transaction with rollback on failure.';
+      return 'Plan is approved. Execute applies corrections in one transaction with rollback on failure.';
     case 'REJECTED':
       return plan.approvalAction === 'KEEP_REPORTS_FROZEN'
         ? 'Plan was kept frozen (DataHub At Risk remains). Generate a new plan to continue later.'
         : 'Plan was rejected. Generate a new plan if remediation should continue.';
     case 'EXECUTING':
     case 'VERIFYING':
-      return `Plan is currently ${plan.state}. Wait for the backend transition to finish.`;
+      return `Plan is currently ${plan.state === 'EXECUTING' ? 'executing' : 'verifying'}. Wait for the backend transition to finish.`;
     case 'EXECUTION_FAILED':
+      return 'Plan ended in execution failed. This plan cannot be retried — generate a new plan.';
     case 'VERIFICATION_FAILED':
-      return `Plan ended in ${plan.state}. This plan cannot be retried — generate a new plan.`;
+      return 'Plan ended in verification failed. This plan cannot be retried — generate a new plan.';
     case 'RESOLVED':
       return plan.datahubWriteback?.outcome === 'SYNCED'
-        ? 'Plan is RESOLVED and DataHub write-back synced.'
-        : 'Plan is RESOLVED in ERP data. DataHub write-back can be retried if metadata is still stale.';
+        ? 'Plan is resolved and DataHub write-back synced.'
+        : 'Plan is resolved in ERP data. DataHub write-back can be retried if metadata is still stale.';
     default:
-      return `Plan state: ${plan.state}`;
+      return 'Plan state is unavailable for remediation actions.';
   }
 }

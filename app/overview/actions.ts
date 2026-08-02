@@ -2,19 +2,14 @@
 
 import { redirect } from 'next/navigation';
 import { runInvestigation } from '../../src/agent/orchestrator';
-import { AnthropicInvestigationModel } from '../../src/agent/model-anthropic';
-import { DeterministicTestModel } from '../../src/agent/model-test';
-import type { InvestigationModel } from '../../src/agent/model';
+import { createInvestigationModel } from '../../src/agent/model-factory';
 import { getServerPool } from '../../src/agent/server-pool';
 import { applyConversionError } from '../../demo-data/scenarios/conversion-error';
 import { seedDatabase } from '../../src/db/seed';
+import { getRuntimePolicy } from '../../src/runtime/runtime-policy';
 import { assertDemoMode } from '../../src/ui/lib/demo-mode';
 import { persistDemoCompletedInvestigation } from '../../src/ui/server/demo-incident';
 import { hasBlockingRemediationPlan } from '../../src/ui/server/queries';
-
-function pickModel(): InvestigationModel {
-  return process.env.ANTHROPIC_API_KEY ? new AnthropicInvestigationModel() : new DeterministicTestModel();
-}
 
 function isMcpUnavailable(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -25,6 +20,19 @@ function isMcpUnavailable(error: unknown): boolean {
     name.includes('DataHub') ||
     /MCP_UNAVAILABLE|DataHub|bridge|ECONNREFUSED|spawn/i.test(message)
   );
+}
+
+function isDataHubFailure(finalState: string, error: unknown): boolean {
+  return (
+    ['MCP_UNAVAILABLE', 'DATASET_NOT_FOUND', 'LINEAGE_INCOMPLETE', 'WRITEBACK_FAILED'].includes(finalState) ||
+    isMcpUnavailable(error)
+  );
+}
+
+function disabledFallbackError(judgeMode: boolean): string {
+  return judgeMode
+    ? 'Live DataHub MCP investigation failed. Demo fallback is disabled in judge mode.'
+    : 'Live DataHub MCP investigation failed. Demo fallback is disabled.';
 }
 
 export type DemoActionResult =
@@ -40,10 +48,15 @@ export async function simulateConversionErrorAction(): Promise<DemoActionResult>
   try {
     assertDemoMode('Simulate Conversion Error');
     const pool = getServerPool();
+    const policy = getRuntimePolicy();
     await applyConversionError(pool);
+    // Deliberately leave the scenario at-risk if live investigation fails:
+    // users can repair the DataHub connection and re-run investigation against
+    // the same evidence. Reset Demo remains the explicit rollback control.
 
     const incidentId = `incident-ui-${Date.now()}`;
     try {
+      const selection = createInvestigationModel(policy);
       const record = await runInvestigation(
         {
           incidentId,
@@ -52,7 +65,7 @@ export async function simulateConversionErrorAction(): Promise<DemoActionResult>
           requestedBy: 'overview-ui',
           mode: 'TEST'
         },
-        { pool, model: pickModel() }
+        { pool, ...selection }
       );
 
       if (record.finalState === 'INVESTIGATION_COMPLETED' && record.output) {
@@ -60,7 +73,7 @@ export async function simulateConversionErrorAction(): Promise<DemoActionResult>
       }
 
       // Agent finished in a failure state — still open the run for inspection.
-      if (isMcpUnavailable(record.error) || record.finalState === 'MCP_UNAVAILABLE') {
+      if (isDataHubFailure(record.finalState, record.error) && policy.allowDemoFallback) {
         const fallback = await persistDemoCompletedInvestigation(pool, {
           incidentId,
           requestedBy: 'overview-ui-demo-fallback'
@@ -68,17 +81,24 @@ export async function simulateConversionErrorAction(): Promise<DemoActionResult>
         redirect(`/incidents/${fallback.investigationId}`);
       }
 
+      if (isDataHubFailure(record.finalState, record.error)) {
+        return { ok: false, error: disabledFallbackError(policy.judgeMode) };
+      }
+
       redirect(`/incidents/${record.investigationId}`);
     } catch (error) {
       if (error && typeof error === 'object' && 'digest' in error) {
         throw error;
       }
-      if (isMcpUnavailable(error)) {
+      if (isMcpUnavailable(error) && policy.allowDemoFallback) {
         const fallback = await persistDemoCompletedInvestigation(pool, {
           incidentId,
           requestedBy: 'overview-ui-demo-fallback'
         });
         redirect(`/incidents/${fallback.investigationId}`);
+      }
+      if (isMcpUnavailable(error)) {
+        return { ok: false, error: disabledFallbackError(policy.judgeMode) };
       }
       throw error;
     }

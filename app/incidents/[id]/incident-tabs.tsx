@@ -5,14 +5,23 @@ import type { IncidentDetailViewModel } from '../../../src/ui/view-models/incide
 import { ActivityLogTable } from '../../../src/ui/components/activity-log-table';
 import { ImpactGraph } from '../../../src/ui/components/impact-graph';
 import { Panel } from '../../../src/ui/components/panel';
+import { PlanDetailDialog, type PlanDetailView } from '../../../src/ui/components/plan-detail-dialog';
 import { StatusBadge, toneForTerminalState } from '../../../src/ui/components/status-badge';
 import { UrnLineage, UrnList } from '../../../src/ui/components/urn-list';
 import { formatDecimalDisplay, formatIdrDisplay, formatIsoDateTime, formatPercentDisplay } from '../../../src/ui/lib/format-display';
 import {
   labelApprovalAction,
+  labelCorrectionAction,
+  labelExecutionFailure,
+  labelExposureMethod,
+  labelField,
+  labelInvestigationState,
   labelPlanState,
+  labelProvenanceType,
+  labelTable,
   labelVerification,
-  labelWriteback
+  labelWriteback,
+  humanizeToken
 } from '../../../src/ui/lib/status-labels';
 import { RemediationControls } from './remediation-controls';
 
@@ -22,9 +31,26 @@ type Tab = (typeof TABS)[number];
 export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
   const [tab, setTab] = useState<Tab>('Investigation');
   const [hydrated, setHydrated] = useState(false);
+  const [viewingPlanId, setViewingPlanId] = useState<string | null>(null);
   useEffect(() => {
     setHydrated(true);
   }, []);
+  const viewingPlan: PlanDetailView | null = useMemo(() => {
+    if (!viewingPlanId) return null;
+    const entry = vm.remediation.planHistory.find((plan) => plan.planId === viewingPlanId);
+    if (!entry) return null;
+    return {
+      planId: entry.planId,
+      state: entry.state,
+      version: entry.version,
+      approvalAction: entry.approvalAction,
+      createdAt: entry.createdAt,
+      executedAt: entry.executedAt,
+      verificationStatus: entry.verificationStatus,
+      isActive: entry.isActive,
+      proposedCorrections: entry.proposedCorrections
+    };
+  }, [viewingPlanId, vm.remediation.planHistory]);
   const currency = vm.currency ?? 'IDR';
   const fi = vm.impact.financialImpact;
   const ri = vm.impact.recordImpact;
@@ -53,7 +79,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
               <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-ink-muted">Provenance type</dt>
-                  <dd className="font-mono">{vm.investigation.expectedValueProvenance.type}</dd>
+                  <dd>{labelProvenanceType(vm.investigation.expectedValueProvenance.type)}</dd>
                 </div>
                 <div>
                   <dt className="text-ink-muted">Evidence reference</dt>
@@ -63,11 +89,17 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                 </div>
                 <div>
                   <dt className="text-ink-muted">Expected</dt>
-                  <dd className="font-mono">{vm.investigation.expectedValueProvenance.expectedValue}</dd>
+                  <dd className="font-mono">
+                    {formatDecimalDisplay(
+                      vm.investigation.expectedValueProvenance.expectedValue ?? ''
+                    )}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-ink-muted">Actual</dt>
-                  <dd className="font-mono">{vm.investigation.expectedValueProvenance.actualValue}</dd>
+                  <dd className="font-mono">
+                    {formatDecimalDisplay(vm.investigation.expectedValueProvenance.actualValue ?? '')}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-ink-muted">Captured at</dt>
@@ -115,6 +147,32 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
 
           <Panel title="DataHub context" subtitle="Raw URNs remain available via tooltip on each chip.">
             <div className="space-y-4 text-sm">
+              {vm.investigation.provenance ? (
+                <dl className="grid gap-2 border-b border-ink/15 pb-4 text-xs sm:grid-cols-3">
+                  <div>
+                    <dt className="text-ink-muted">DataHub context</dt>
+                    <dd className="font-semibold">
+                      {vm.investigation.provenance.datahubSource === 'LIVE_MCP'
+                        ? 'Live MCP'
+                        : 'Demo context fallback'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-ink-muted">Model narration</dt>
+                    <dd className="font-semibold">
+                      {vm.investigation.provenance.modelSource === 'ANTHROPIC'
+                        ? 'Anthropic'
+                        : 'Deterministic template'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-ink-muted">Fallback used</dt>
+                    <dd className="font-semibold">{vm.investigation.provenance.fallbackUsed ? 'Yes' : 'No'}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="text-xs text-ink-muted">Runtime provenance is unavailable for this legacy record.</p>
+              )}
               <div>
                 <h3 className="mb-2 font-semibold">Assets</h3>
                 <UrnList urns={vm.investigation.datahubContext.assets.map((x) => x.urn)} />
@@ -167,7 +225,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
               {vm.investigation.stateHistory.map((entry, index) => (
                 <li key={`${entry.state}-${index}`}>
                   <StatusBadge
-                    label={`${index + 1}. ${entry.state}`}
+                    label={`${index + 1}. ${labelInvestigationState(entry.state)}`}
                     tone={toneForTerminalState(entry.state)}
                     title={formatIsoDateTime(entry.at)}
                   />
@@ -215,11 +273,11 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
             {fi ? (
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-ink-muted">Inventory balance misstatement</dt>
+                  <dt className="text-ink-muted">Inventory balance mis-statement</dt>
                   <dd className="font-mono">{formatIdrDisplay(fi.inventoryValueDelta)}</dd>
                 </div>
                 <div>
-                  <dt className="text-ink-muted">Realized COGS misstatement</dt>
+                  <dt className="text-ink-muted">Realized COGS mis-statement</dt>
                   <dd className="font-mono">{formatIdrDisplay(fi.cogsDelta)}</dd>
                 </div>
                 <div>
@@ -245,11 +303,11 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="text-ink-muted">On-hand affected units</dt>
-                  <dd className="font-mono">{formatDecimalDisplay(fi.onHandAffectedUnits, 3)}</dd>
+                  <dd className="font-mono">{formatDecimalDisplay(fi.onHandAffectedUnits)}</dd>
                 </div>
                 <div>
                   <dt className="text-ink-muted">Sold affected units</dt>
-                  <dd className="font-mono">{formatDecimalDisplay(fi.soldAffectedUnits, 3)}</dd>
+                  <dd className="font-mono">{formatDecimalDisplay(fi.soldAffectedUnits)}</dd>
                 </div>
                 <div>
                   <dt className="text-ink-muted">Populations proven disjoint</dt>
@@ -262,7 +320,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                 </div>
                 <div>
                   <dt className="text-ink-muted">Exposure method</dt>
-                  <dd className="font-mono text-xs">{fi.exposureMethod}</dd>
+                  <dd className="text-sm">{labelExposureMethod(fi.exposureMethod)}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="text-ink-muted">Reconciliation invariant</dt>
@@ -326,7 +384,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                 <ul className="space-y-2">
                   {vm.impact.correctionTargets.map((ref) => (
                     <li key={`${ref.table}:${ref.recordId}`} className="lg-tag border-ink text-ink">
-                      {ref.table} · {ref.recordId}
+                      {labelTable(ref.table)} · {ref.recordId}
                     </li>
                   ))}
                 </ul>
@@ -356,13 +414,13 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                     {vm.impact.proposedCorrections.map((step) => (
                       <tr key={step.sequence} className="border-b border-ink/20 align-top">
                         <td className="py-2 pr-3 font-mono">{step.sequence}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">{step.table}</td>
+                        <td className="py-2 pr-3 text-xs">{labelTable(step.table)}</td>
                         <td className="py-2 pr-3 font-mono text-xs">{step.recordId}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">{step.field}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">{step.beforeValue}</td>
-                        <td className="py-2 pr-3 font-mono text-xs">{step.afterValue}</td>
+                        <td className="py-2 pr-3 text-xs">{labelField(step.field)}</td>
+                        <td className="py-2 pr-3 font-mono text-xs">{formatDecimalDisplay(step.beforeValue)}</td>
+                        <td className="py-2 pr-3 font-mono text-xs">{formatDecimalDisplay(step.afterValue)}</td>
                         <td className="max-w-xs py-2 pr-3 text-xs text-ink-muted">
-                          {step.action}
+                          {labelCorrectionAction(step.action)}
                           {step.action === 'RECONCILE_JOURNAL_ENTRIES'
                             ? ' — read-only reconciliation; journals are not rewritten.'
                             : ''}
@@ -383,7 +441,14 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
       Remediation: (
         <div className="space-y-5">
           <RemediationControls vm={vm} surface="remediation" />
-          <Panel title="Latest remediation plan">
+          <Panel
+            title="Latest remediation plan"
+            subtitle={
+              vm.remediation.planId
+                ? 'Click View plan to inspect every proposed correction before approval.'
+                : undefined
+            }
+          >
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-ink-muted">Status</dt>
@@ -429,25 +494,44 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                 <dd className="text-ink-muted">{vm.remediation.availableDecision}</dd>
               </div>
             </dl>
+            {vm.remediation.planId ? (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  className="lg-btn-gold"
+                  data-testid="view-active-plan"
+                  onClick={() => setViewingPlanId(vm.remediation.planId)}
+                >
+                  View plan
+                </button>
+              </div>
+            ) : null}
           </Panel>
           {vm.remediation.planHistory.length > 0 ? (
-            <Panel title="Plan history" subtitle="Newest first. Active plan drives the action buttons above.">
+            <Panel title="Plan history" subtitle="Newest first. Click a row to view that plan’s corrections.">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[720px] border-collapse text-left text-sm">
                   <caption className="sr-only">Remediation plan history</caption>
                   <thead>
                     <tr className="border-b-2 border-ink">
                       <th className="py-2 pr-3">Status</th>
                       <th className="py-2 pr-3">Version</th>
+                      <th className="py-2 pr-3">Steps</th>
                       <th className="py-2 pr-3">Created</th>
                       <th className="py-2 pr-3">Decision</th>
                       <th className="py-2 pr-3">Executed</th>
                       <th className="py-2 pr-3">Verification</th>
+                      <th className="py-2 pr-3">
+                        <span className="sr-only">View</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {vm.remediation.planHistory.map((entry) => (
-                      <tr key={entry.planId} className="border-b border-ink/20 align-top">
+                      <tr
+                        key={entry.planId}
+                        className="border-b border-ink/20 align-top transition-colors hover:bg-cream/60"
+                      >
                         <td className="py-2 pr-3">
                           <div className="flex flex-wrap gap-1">
                             <StatusBadge
@@ -458,12 +542,23 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                           </div>
                         </td>
                         <td className="py-2 pr-3 font-mono font-bold">v{entry.version}</td>
+                        <td className="py-2 pr-3 font-mono">{entry.proposedCorrections.length}</td>
                         <td className="py-2 pr-3 font-mono text-xs">{formatIsoDateTime(entry.createdAt)}</td>
                         <td className="py-2 pr-3">{labelApprovalAction(entry.approvalAction)}</td>
                         <td className="py-2 pr-3 font-mono text-xs">
                           {entry.executedAt ? formatIsoDateTime(entry.executedAt) : '—'}
                         </td>
                         <td className="py-2 pr-3">{labelVerification(entry.verificationStatus)}</td>
+                        <td className="py-2 pr-3">
+                          <button
+                            type="button"
+                            className="lg-btn"
+                            data-testid={`view-plan-${entry.planId}`}
+                            onClick={() => setViewingPlanId(entry.planId)}
+                          >
+                            View
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -475,27 +570,41 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
             {vm.remediation.steps.length === 0 ? (
               <p className="text-sm text-ink-muted">No proposed steps yet. Generate a plan to snapshot corrections.</p>
             ) : (
-              <ol className="space-y-2">
-                {vm.remediation.steps.map((step) => (
-                  <li key={step.sequence} className="lg-panel-sm px-3 py-2 text-sm">
-                    <span className="font-mono text-xs text-ink-muted">#{step.sequence}</span>{' '}
-                    <span className="font-semibold">{step.action}</span> on{' '}
-                    <span className="font-mono text-xs">
-                      {step.table}:{step.recordId}.{step.field}
-                    </span>
-                    {step.action === 'RECONCILE_JOURNAL_ENTRIES' ? (
-                      <span className="ml-2 text-xs text-ink-muted">(read-only reconcile)</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
+              <>
+                <ol className="space-y-2">
+                  {vm.remediation.steps.map((step) => (
+                    <li key={step.sequence} className="lg-panel-sm px-3 py-2 text-sm">
+                      <span className="font-mono text-xs text-ink-muted">#{step.sequence}</span>{' '}
+                      <span className="font-semibold">{labelCorrectionAction(step.action)}</span> on{' '}
+                      <span className="text-xs">
+                        {labelTable(step.table)} · {step.recordId} · {labelField(step.field)}
+                      </span>
+                      <span className="mt-1 block font-mono text-xs text-ink-muted">
+                        {formatDecimalDisplay(step.beforeValue)} → {formatDecimalDisplay(step.afterValue)}
+                      </span>
+                      {step.action === 'RECONCILE_JOURNAL_ENTRIES' ? (
+                        <span className="ml-0 text-xs text-ink-muted">(read-only reconcile)</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+                {vm.remediation.planId ? (
+                  <button
+                    type="button"
+                    className="lg-btn mt-3"
+                    onClick={() => setViewingPlanId(vm.remediation.planId)}
+                  >
+                    Open full plan view
+                  </button>
+                ) : null}
+              </>
             )}
           </Panel>
           <Panel title="Correction targets">
             <ul className="flex flex-wrap gap-2">
               {vm.remediation.correctionTargets.map((ref) => (
                 <li key={`${ref.table}:${ref.recordId}`}>
-                  <StatusBadge label={`${ref.table}:${ref.recordId}`} tone="warn" />
+                  <StatusBadge label={`${labelTable(ref.table)} · ${ref.recordId}`} tone="warn" />
                 </li>
               ))}
             </ul>
@@ -562,7 +671,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
             ) : null}
             {vm.resolution.executionFailureReason ? (
               <p className="mt-3 text-sm text-risk" role="alert">
-                Execution failure: {vm.resolution.executionFailureReason.replaceAll('_', ' ')}
+                Execution failure: {labelExecutionFailure(vm.resolution.executionFailureReason)}
                 {vm.resolution.executionFailureDetail
                   ? ` — ${vm.resolution.executionFailureDetail}`
                   : ''}
@@ -580,8 +689,9 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                         step.status === 'FAILED' ? 'risk' : step.status === 'APPLIED' ? 'healthy' : 'neutral'
                       }
                     />
-                    <span className="font-mono text-xs">
-                      #{step.sequence} {step.action} {step.table}:{step.recordId}
+                    <span className="text-xs">
+                      #{step.sequence} {labelCorrectionAction(step.action)} · {labelTable(step.table)} ·{' '}
+                      {step.recordId}
                     </span>
                     <span className="text-ink-muted">{step.detail}</span>
                   </li>
@@ -598,7 +708,7 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
                       label={check.status}
                       tone={check.status === 'PASS' ? 'healthy' : 'risk'}
                     />
-                    <span className="font-mono text-xs">{check.checkId}</span>
+                    <span className="text-xs">{humanizeToken(check.checkId)}</span>
                     <span className="text-ink-muted">{check.remediationHint}</span>
                   </li>
                 ))}
@@ -668,6 +778,11 @@ export function IncidentTabs({ vm }: { vm: IncidentDetailViewModel }) {
       <div role="tabpanel" aria-label={tab}>
         {tabPanels[tab]}
       </div>
+      <PlanDetailDialog
+        open={viewingPlan !== null}
+        plan={viewingPlan}
+        onClose={() => setViewingPlanId(null)}
+      />
     </div>
   );
 }

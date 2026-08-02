@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { getRuntimePolicy } from '../runtime/runtime-policy';
 import type { ActivityLogEntry, DataHubContext, FailureState } from './types';
 
 // ---------------------------------------------------------------------------
@@ -172,6 +173,13 @@ export async function writeInvestigationSummary(targetAsset: string, summaryText
   if (!raw.ok || raw.writePath === undefined) {
     throw new DataHubBridgeError('WRITEBACK_FAILED', raw.message ?? 'Unknown DataHub write-back failure.', activityLog);
   }
+  if (getRuntimePolicy().judgeMode && raw.writePath !== 'mcp') {
+    throw new DataHubBridgeError(
+      'WRITEBACK_FAILED',
+      'Live DataHub MCP write-back is required in judge mode; SDK fallback is not accepted.',
+      activityLog
+    );
+  }
   return {
     writePath: raw.writePath,
     tagWritten: raw.tagWritten ?? false,
@@ -195,6 +203,13 @@ export async function resolveDataHubIncident(
   const activityLog = (raw.activityLog ?? []).map(mapActivityEntry);
   if (!raw.ok || raw.writePath === undefined) {
     throw new DataHubBridgeError('WRITEBACK_FAILED', raw.message ?? 'Unknown DataHub resolution write-back failure.', activityLog);
+  }
+  if (getRuntimePolicy().judgeMode && raw.writePath !== 'mcp') {
+    throw new DataHubBridgeError(
+      'WRITEBACK_FAILED',
+      'Live DataHub MCP resolution write-back is required in judge mode; SDK fallback is not accepted.',
+      activityLog
+    );
   }
   return {
     writePath: raw.writePath,

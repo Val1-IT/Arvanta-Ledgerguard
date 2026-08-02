@@ -1,5 +1,5 @@
 import type { InvestigationFactsForModel } from './prompts/investigation-v1';
-import type { ModelInvestigationOutput } from './types';
+import type { ModelInvestigationOutput, ModelSource } from './types';
 
 // ---------------------------------------------------------------------------
 // Single-provider model abstraction (FASE 5 requirement: "gunakan satu
@@ -10,6 +10,8 @@ import type { ModelInvestigationOutput } from './types';
 // ---------------------------------------------------------------------------
 
 export interface InvestigationModel {
+  /** Set by built-in providers; custom test doubles may omit it. */
+  readonly source?: ModelSource;
   generateInvestigation(facts: InvestigationFactsForModel): Promise<ModelInvestigationOutput>;
 }
 

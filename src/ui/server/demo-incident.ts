@@ -68,6 +68,11 @@ export async function persistDemoCompletedInvestigation(
         tags: [...DEMO_DATAHUB_CONTEXT.tags],
         lineagePath: [...DEMO_DATAHUB_CONTEXT.lineagePath]
       },
+      provenance: {
+        datahubSource: 'STATIC_DEMO_CONTEXT',
+        modelSource: 'DETERMINISTIC_TEMPLATE',
+        fallbackUsed: true
+      },
       engineResultReference: {
         incidentType: engine.incidentType,
         overallStatus: engine.overallStatus,

@@ -121,11 +121,11 @@ export async function loadOverviewViewModel(pool: Pool): Promise<OverviewViewMod
       recentIncidents: summarizeRuns(runs),
       demoModeEnabled,
       resetDisabledReason: !demoModeEnabled
-        ? 'Reset requires DEMO_MODE=true.'
+        ? 'Reset requires demo mode to be enabled.'
         : blocking
-          ? 'Reset is disabled while a remediation plan is EXECUTING or VERIFYING.'
+          ? 'Reset is disabled while a remediation plan is executing or verifying.'
           : null,
-      simulateDisabledReason: !demoModeEnabled ? 'Simulate requires DEMO_MODE=true.' : null,
+      simulateDisabledReason: !demoModeEnabled ? 'Simulate requires demo mode to be enabled.' : null,
       backendAvailable: true,
       backendError: null
     });

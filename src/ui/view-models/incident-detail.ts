@@ -83,6 +83,13 @@ export const IncidentDetailViewModelSchema = z.object({
       glossary: z.array(UiLabeledUrnSchema),
       lineage: z.array(UiLabeledUrnSchema)
     }),
+    provenance: z
+      .object({
+        datahubSource: z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT']),
+        modelSource: z.enum(['ANTHROPIC', 'DETERMINISTIC_TEMPLATE']),
+        fallbackUsed: z.boolean()
+      })
+      .nullable(),
     stateHistory: z.array(z.object({ state: z.string(), at: z.string() })),
     activityLog: z.array(UiActivityLogEntrySchema),
     activityLogSource: UiActivityLogSourceSchema,
@@ -140,7 +147,8 @@ export const IncidentDetailViewModelSchema = z.object({
         updatedAt: z.string(),
         executedAt: z.string().nullable(),
         verificationStatus: z.enum(['PASS', 'FAIL']).nullable(),
-        isActive: z.boolean()
+        isActive: z.boolean(),
+        proposedCorrections: z.array(ProposedCorrectionSchema)
       })
     )
   }),

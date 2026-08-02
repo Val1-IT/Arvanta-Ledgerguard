@@ -84,6 +84,14 @@ after a verified remediation does not roll back the already-correct ERP fix —
 it marks the DataHub-side metadata as stale instead, so the gap is visible
 rather than hidden.
 
+**Judging integrity.** In judge mode, LedgerGuard is fail-closed: static
+DataHub context fallback is disabled, unavailable MCP context or incomplete
+lineage stays failed, and MCP write-back must be live. Each investigation
+stores its DataHub and model provenance so the interface cannot label a
+fallback run as Live MCP. `npm run judge:preflight` and
+`npm run proof:judge-flow` provide repeatable, sanitized evidence against the
+isolated synthetic demo stack.
+
 **Limitations.** The demo dataset is synthetic and scoped to one clear
 scenario. The deployment described is hackathon-grade — a single demo VM, no
 multi-tenant isolation. DataHub OSS itself is resource-heavy (~8 GB RAM, ~13

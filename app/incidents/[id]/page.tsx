@@ -5,6 +5,11 @@ import { ErrorState } from '../../../src/ui/components/error-state';
 import { PageHeader } from '../../../src/ui/components/page-header';
 import { StatusBadge, toneForHealth, toneForTerminalState } from '../../../src/ui/components/status-badge';
 import { formatIdrDisplay, formatIsoDateTime } from '../../../src/ui/lib/format-display';
+import {
+  labelHealth,
+  labelInvestigationState,
+  labelNextStep
+} from '../../../src/ui/lib/status-labels';
 import { loadIncidentDetailViewModel } from '../../../src/ui/server/incident-detail';
 import { IncidentTabs } from './incident-tabs';
 
@@ -45,16 +50,19 @@ export default async function IncidentPage({
         meta={
           <>
             <StatusBadge
-              label={vm.severity}
+              label={labelHealth(vm.severity)}
               tone={toneForHealth(vm.severity === 'UNKNOWN' ? 'DEGRADED' : vm.severity)}
             />
-            <StatusBadge label={vm.status} tone={toneForTerminalState(vm.status)} />
+            <StatusBadge
+              label={labelInvestigationState(vm.status)}
+              tone={toneForTerminalState(vm.status)}
+            />
             {vm.recommendedNextStep ? (
-              <StatusBadge label={vm.recommendedNextStep.replaceAll('_', ' ')} tone="gold" />
+              <StatusBadge label={labelNextStep(vm.recommendedNextStep)} tone="gold" />
             ) : null}
             {vm.primaryExposure ? (
               <StatusBadge
-                label={`${formatIdrDisplay(vm.primaryExposure)} ${vm.currency ?? 'IDR'}`}
+                label={formatIdrDisplay(vm.primaryExposure)}
                 tone="warn"
                 title="Primary exposure from backend"
               />

@@ -35,6 +35,8 @@ function missingEvidenceFor(facts: InvestigationFactsForModel): string[] {
 }
 
 export class DeterministicTestModel implements InvestigationModel {
+  readonly source = 'DETERMINISTIC_TEMPLATE' as const;
+
   async generateInvestigation(facts: InvestigationFactsForModel): Promise<ModelInvestigationOutput> {
     const { engineResult, datahubContext } = facts;
     const missingEvidence = missingEvidenceFor(facts);

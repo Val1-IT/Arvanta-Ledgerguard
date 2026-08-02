@@ -17,6 +17,8 @@ import {
   type FailureState,
   type InvestigationAgentInput,
   type InvestigationOutput,
+  type InvestigationProvenance,
+  type ModelSource,
   type InvestigationRunRecord,
   type InvestigationStatus,
   type ModelInvestigationOutput,
@@ -43,6 +45,7 @@ import {
 export interface OrchestratorDeps {
   pool: Pool;
   model: InvestigationModel;
+  modelSource?: ModelSource;
   now?: () => Date;
   idGenerator?: () => string;
 }
@@ -87,6 +90,7 @@ function buildOutput(
   modelOutput: ModelInvestigationOutput,
   engineResultReference: EngineResultReference,
   datahubContext: DataHubContext,
+  provenance: InvestigationProvenance,
   activityLog: ActivityLogEntry[]
 ): InvestigationOutput {
   return {
@@ -98,6 +102,7 @@ function buildOutput(
     rootCauseExplanation: modelOutput.rootCauseExplanation,
     businessImpactExplanation: modelOutput.businessImpactExplanation,
     datahubContext,
+    provenance,
     engineResultReference,
     remediationRationale: modelOutput.remediationRationale,
     recommendedNextStep: modelOutput.recommendedNextStep,
@@ -117,6 +122,11 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
   const investigationId = idGenerator();
   const createdAt = now().toISOString();
   const logger = new ActivityLogger();
+  const provenance: InvestigationProvenance = {
+    datahubSource: 'LIVE_MCP',
+    modelSource: deps.modelSource ?? deps.model.source ?? 'DETERMINISTIC_TEMPLATE',
+    fallbackUsed: false
+  };
   const stateHistory: InvestigationRunRecord['stateHistory'] = [];
 
   function transition(state: WorkflowState | FailureState): void {
@@ -229,6 +239,7 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
       modelOutput,
       engineResultReference,
       datahubContext,
+      provenance,
       logger.finalize()
     );
     return fail(
@@ -262,6 +273,7 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
       modelOutput,
       engineResultReference,
       datahubContext,
+      provenance,
       logger.finalize()
     );
     return fail('WRITEBACK_FAILED', err instanceof Error ? err.message : String(err), { output });
@@ -277,6 +289,7 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
     modelOutput,
     engineResultReference,
     datahubContext,
+    provenance,
     logger.finalize()
   );
 

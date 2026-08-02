@@ -23,7 +23,7 @@ export async function resetDemoViaUi(page: Page) {
 
 export async function expectHealthyOverview(page: Page) {
   await expect(page.getByText('Data Health', { exact: true })).toBeVisible();
-  await expect(page.getByText(/HEALTHY/i).first()).toBeVisible();
+  await expect(page.getByText(/Healthy/i).first()).toBeVisible();
   await expect(page.getByText('Demo environment — synthetic ERP data only.')).toBeVisible();
 }
 
