@@ -86,30 +86,11 @@ function buildActivityLog(run: InvestigationRunRecord): {
     };
   }
 
-  if (run.stateHistory.length > 0) {
-    const fallback = run.stateHistory.map((entry, index) => ({
-      seq: index + 1,
-      tool: 'orchestrator.state',
-      startedAt: entry.at,
-      finishedAt: entry.at,
-      durationMs: 0,
-      inputSummary: entry.state,
-      outputSummary: run.error && index === run.stateHistory.length - 1 ? run.error.message : entry.state,
-      status: (run.error && index === run.stateHistory.length - 1 ? 'ERROR' : 'OK') as 'OK' | 'ERROR',
-      errorSanitized: run.error && index === run.stateHistory.length - 1 ? run.error.message : null
-    }));
-    return {
-      activityLog: fallback,
-      activityLogSource: 'state_history_fallback',
-      activityLogNote:
-        'This failed run did not persist a full tool activity log (output was null). Showing state-history transitions and the terminal failure event instead — no synthetic tool calls were invented.'
-    };
-  }
-
   return {
     activityLog: [],
     activityLogSource: 'none',
-    activityLogNote: 'No activity log or state history is available for this run.'
+    activityLogNote:
+      'This run has no persisted tool activity log. State-history transitions and the terminal failure are shown separately; no synthetic tool calls are displayed.'
   };
 }
 

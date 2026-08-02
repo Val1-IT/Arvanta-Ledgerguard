@@ -27,7 +27,6 @@ export const UiActivityLogEntrySchema = z.object({
 
 export const UiActivityLogSourceSchema = z.enum([
   'output',
-  'state_history_fallback',
   'none'
 ]);
 

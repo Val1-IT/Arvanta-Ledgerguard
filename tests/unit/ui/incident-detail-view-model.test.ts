@@ -56,7 +56,7 @@ describe('incident detail view model', () => {
     expect(vm.investigation.activityLog[0]?.seq).toBe(1);
   });
 
-  it('failed run does not show completion panels and uses state-history fallback for activity', () => {
+  it('failed run does not show completion panels or invent activity-log tool calls', () => {
     const failed: InvestigationRunRecord = {
       ...run,
       finalState: 'MCP_UNAVAILABLE',
@@ -82,9 +82,9 @@ describe('incident detail view model', () => {
     expect(vm.uiFlags.showCompletionPanels).toBe(false);
     expect(vm.uiFlags.showFailurePanel).toBe(true);
     expect(vm.investigation.explanations.rootCause).toBeNull();
-    expect(vm.investigation.activityLogSource).toBe('state_history_fallback');
-    expect(vm.investigation.activityLogNote?.toLowerCase()).toContain('did not persist');
-    expect(vm.investigation.activityLog.at(-1)?.status).toBe('ERROR');
+    expect(vm.investigation.activityLogSource).toBe('none');
+    expect(vm.investigation.activityLog).toEqual([]);
+    expect(vm.investigation.activityLogNote?.toLowerCase()).toContain('no persisted tool activity');
   });
 
   it('labels DataHub URNs for display while preserving raw values', () => {
