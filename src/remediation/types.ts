@@ -130,7 +130,7 @@ export type RemediationVerification = z.infer<typeof RemediationVerificationSche
 // succeeds.
 // ---------------------------------------------------------------------------
 
-export const DataHubWritebackOutcomeSchema = z.enum(['SYNCED', 'FAILED']);
+export const DataHubWritebackOutcomeSchema = z.enum(['SYNCED', 'FAILED', 'NOT_CONFIGURED']);
 export type DataHubWritebackOutcome = z.infer<typeof DataHubWritebackOutcomeSchema>;
 
 export const RemediationWritebackResultSchema = z.object({
