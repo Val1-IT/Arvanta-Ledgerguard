@@ -14,6 +14,8 @@ import {
 } from '../../src/remediation/approve';
 import { NoRemediableIncidentError, generateRemediationPlan } from '../../src/remediation/generate-plan';
 import { executeRemediationPlan } from '../../src/remediation/execute';
+import { testHarnessAuthority } from '../../src/remediation/trusted-authority';
+import { ApprovalRequiredError } from '@ledgerguard/policy';
 import {
   applyRemediationPlanTransition,
   loadRemediationPlan
@@ -137,7 +139,7 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await applyConversionError(pool);
     const investigationId = await seedCompletedInvestigation(pool);
 
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
 
     expect(plan.state).toBe('DRAFT');
     expect(plan.version).toBe(1);
@@ -160,7 +162,7 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await seedDatabase(pool);
     await applyConversionError(pool);
     const investigationId = await seedCompletedInvestigation(pool);
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
 
     const submitted = await submitRemediationPlanForApproval(pool, { planId: plan.id, expectedVersion: plan.version });
     expect(submitted.state).toBe('PENDING_APPROVAL');
@@ -175,7 +177,7 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await seedDatabase(pool);
     await applyConversionError(pool);
     const investigationId = await seedCompletedInvestigation(pool);
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
     const pending = await submitRemediationPlanForApproval(pool, { planId: plan.id, expectedVersion: plan.version });
 
     const approved = await decideRemediationPlan(pool, {
@@ -183,7 +185,7 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
       expectedVersion: pending.version,
       action: 'APPROVE',
       decidedBy: 'approver-1'
-    });
+    }, { authority: testHarnessAuthority() });
 
     expect(approved.state).toBe('APPROVED');
     expect(approved.approvalAction).toBe('APPROVE');
@@ -196,7 +198,7 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     const before = await snapshotErp(pool);
 
     const investigationIdA = await seedCompletedInvestigation(pool);
-    const planA = await createRemediationPlan({ investigationId: investigationIdA, requestedBy: 'tester' }, { pool });
+    const planA = await createRemediationPlan({ investigationId: investigationIdA, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
     const pendingA = await submitRemediationPlanForApproval(pool, { planId: planA.id, expectedVersion: planA.version });
     const rejectedA = await decideRemediationPlan(pool, {
       planId: planA.id,
@@ -204,19 +206,19 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
       action: 'REJECT',
       decidedBy: 'approver-1',
       note: 'plan is wrong'
-    });
+    }, { authority: testHarnessAuthority() });
     expect(rejectedA.state).toBe('REJECTED');
     expect(rejectedA.approvalAction).toBe('REJECT');
 
     const investigationIdB = await seedCompletedInvestigation(pool);
-    const planB = await createRemediationPlan({ investigationId: investigationIdB, requestedBy: 'tester' }, { pool });
+    const planB = await createRemediationPlan({ investigationId: investigationIdB, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
     const pendingB = await submitRemediationPlanForApproval(pool, { planId: planB.id, expectedVersion: planB.version });
     const rejectedB = await decideRemediationPlan(pool, {
       planId: planB.id,
       expectedVersion: pendingB.version,
       action: 'KEEP_REPORTS_FROZEN',
       decidedBy: 'approver-1'
-    });
+    }, { authority: testHarnessAuthority() });
     expect(rejectedB.state).toBe('REJECTED');
     expect(rejectedB.approvalAction).toBe('KEEP_REPORTS_FROZEN');
 
@@ -230,7 +232,7 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await seedDatabase(pool);
     await applyConversionError(pool);
     const investigationId = await seedCompletedInvestigation(pool);
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
 
     const first = await applyRemediationPlanTransition(pool, plan.id, plan.version, {
       state: 'PENDING_APPROVAL',
@@ -254,11 +256,11 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await applyConversionError(pool);
     const before = await snapshotErp(pool);
     const investigationId = await seedCompletedInvestigation(pool);
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
 
-    await expect(executeRemediationPlan({ planId: plan.id, expectedVersion: plan.version }, { pool })).rejects.toThrow(
-      InvalidTransitionError
-    );
+    await expect(
+      executeRemediationPlan({ planId: plan.id, expectedVersion: plan.version }, { pool, authority: testHarnessAuthority() })
+    ).rejects.toThrow(ApprovalRequiredError);
 
     const after = await snapshotErp(pool);
     expect(after).toEqual(before);
@@ -270,16 +272,19 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await applyConversionError(pool);
 
     const investigationId = await seedCompletedInvestigation(pool);
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
     const pending = await submitRemediationPlanForApproval(pool, { planId: plan.id, expectedVersion: plan.version });
     const approved = await decideRemediationPlan(pool, {
       planId: plan.id,
       expectedVersion: pending.version,
       action: 'APPROVE',
       decidedBy: 'approver-1'
-    });
+    }, { authority: testHarnessAuthority() });
 
-    const resolved = await executeRemediationPlan({ planId: plan.id, expectedVersion: approved.version }, { pool });
+    const resolved = await executeRemediationPlan(
+      { planId: plan.id, expectedVersion: approved.version },
+      { pool, authority: testHarnessAuthority() }
+    );
 
     expect(resolved.state).toBe('RESOLVED');
     expect(resolved.verification?.result.overallStatus).toBe('PASS');
@@ -298,14 +303,14 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await applyConversionError(pool);
 
     const investigationId = await seedCompletedInvestigation(pool);
-    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool });
+    const plan = await createRemediationPlan({ investigationId, requestedBy: 'tester' }, { pool, authority: testHarnessAuthority() });
     const pending = await submitRemediationPlanForApproval(pool, { planId: plan.id, expectedVersion: plan.version });
     const approved = await decideRemediationPlan(pool, {
       planId: plan.id,
       expectedVersion: pending.version,
       action: 'APPROVE',
       decidedBy: 'approver-1'
-    });
+    }, { authority: testHarnessAuthority() });
 
     // Simulate a concurrent change to the same conversion factor after
     // approval but before execution — the plan's approved snapshot no longer
@@ -313,7 +318,10 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
     await pool.query(`update product_units set conversion_factor = '8.0000' where id = 'pu-carton'`);
     const drifted = await snapshotErp(pool);
 
-    const failed = await executeRemediationPlan({ planId: plan.id, expectedVersion: approved.version }, { pool });
+    const failed = await executeRemediationPlan(
+      { planId: plan.id, expectedVersion: approved.version },
+      { pool, authority: testHarnessAuthority() }
+    );
 
     expect(failed.state).toBe('EXECUTION_FAILED');
     expect(failed.executionResult?.failureReason).toBe('DRIFT_DETECTED');

@@ -8,6 +8,8 @@ import {
   submitRemediationPlanForApproval
 } from '../../../src/remediation/approve';
 import { executeRemediationPlan } from '../../../src/remediation/execute';
+import { incidentUiAuthority } from '../../../src/remediation/trusted-authority';
+import { ApprovalRequiredError, PolicyDeniedError } from '@ledgerguard/policy';
 import { NoRemediableIncidentError } from '../../../src/remediation/generate-plan';
 import {
   InvalidTransitionError,
@@ -43,6 +45,12 @@ function mapError(error: unknown): RemediationActionResult {
   if (error instanceof RemediationPlanNotFoundError) {
     return { ok: false, error: `Remediation plan not found: ${error.planId}`, code: 'NOT_FOUND' };
   }
+  if (error instanceof PolicyDeniedError) {
+    return { ok: false, error: error.message, code: 'POLICY_DENIED' };
+  }
+  if (error instanceof ApprovalRequiredError) {
+    return { ok: false, error: error.message, code: 'APPROVAL_REQUIRED' };
+  }
   const message = error instanceof Error ? error.message : 'Remediation action failed';
   return { ok: false, error: message, code: 'UNKNOWN' };
 }
@@ -61,7 +69,7 @@ export async function generateRemediationPlanAction(input: {
     const pool = getServerPool();
     const plan = await createRemediationPlan(
       { investigationId: input.investigationId, requestedBy: 'incident-ui' },
-      { pool }
+      { pool, authority: incidentUiAuthority() }
     );
     revalidateIncident(input.investigationId);
     return {
@@ -103,13 +111,17 @@ export async function decideRemediationPlanAction(input: {
 }): Promise<RemediationActionResult> {
   try {
     assertDemoMode('Decide remediation plan');
-    const plan = await decideRemediationPlan(getServerPool(), {
-      planId: input.planId,
-      expectedVersion: input.expectedVersion,
-      action: input.action,
-      decidedBy: 'incident-ui',
-      note: input.note ?? null
-    });
+    const plan = await decideRemediationPlan(
+      getServerPool(),
+      {
+        planId: input.planId,
+        expectedVersion: input.expectedVersion,
+        action: input.action,
+        decidedBy: 'incident-ui',
+        note: input.note ?? null
+      },
+      { authority: incidentUiAuthority() }
+    );
     revalidateIncident(input.investigationId);
     return { ok: true, planId: plan.id, state: plan.state, version: plan.version };
   } catch (error) {
@@ -126,7 +138,7 @@ export async function executeRemediationPlanAction(input: {
     assertDemoMode('Execute remediation plan');
     let plan = await executeRemediationPlan(
       { planId: input.planId, expectedVersion: input.expectedVersion },
-      { pool: getServerPool() }
+      { pool: getServerPool(), authority: incidentUiAuthority() }
     );
 
     // Best-effort DataHub sync immediately after a verified ERP restore so the
