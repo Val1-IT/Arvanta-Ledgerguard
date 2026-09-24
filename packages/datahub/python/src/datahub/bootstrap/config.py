@@ -14,7 +14,15 @@ from typing import Optional
 from datahub.ingestion.graph.client import DatahubClientConfig, DataHubGraph
 from datahub.sdk import DataHubClient
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+def _find_repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pnpm-workspace.yaml").exists():
+            return parent
+    return here.parents[5]
+
+
+REPO_ROOT = _find_repo_root()
 DEFAULT_GMS_URL = "http://localhost:8080"
 
 
