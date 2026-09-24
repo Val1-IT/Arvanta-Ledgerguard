@@ -17,6 +17,9 @@ importers:
       '@ledgerguard/datahub':
         specifier: workspace:*
         version: link:packages/datahub
+      '@ledgerguard/policy':
+        specifier: workspace:*
+        version: link:packages/policy
       '@ledgerguard/postgres':
         specifier: workspace:*
         version: link:packages/postgres
@@ -122,6 +125,22 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/policy:
+    dependencies:
+      '@ledgerguard/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

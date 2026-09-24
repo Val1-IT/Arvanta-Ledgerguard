@@ -23,7 +23,8 @@ const FORBIDDEN = [
   '@modelcontextprotocol/sdk',
   'acryl-datahub',
   '@ledgerguard/postgres',
-  '@ledgerguard/datahub'
+  '@ledgerguard/datahub',
+  '@ledgerguard/policy'
 ] as const;
 
 describe('@ledgerguard/core isolation', () => {
