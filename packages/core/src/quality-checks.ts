@@ -1,3 +1,4 @@
+import { findDuplicateMovementGroups } from './detectors/duplicate-inventory-movement';
 import { checkJournalBalance } from './journal-impact';
 import { formatFactor, formatMoney, formatPercentage, formatQuantity, safeDiv, toDecimal } from './decimal';
 import type { EvidenceItem, QualityCheckEvaluator, QualityCheckInput, QualityCheckResult } from './types';
@@ -287,10 +288,51 @@ export class GrossMarginConsistencyCheck implements QualityCheckEvaluator {
   }
 }
 
+export class DuplicateReceiptMovementCheck implements QualityCheckEvaluator {
+  readonly checkId = 'DUPLICATE_RECEIPT_MOVEMENT';
+
+  evaluate(input: QualityCheckInput): QualityCheckResult {
+    const groups = findDuplicateMovementGroups(input);
+    if (groups.length === 0) {
+      return {
+        checkId: this.checkId,
+        status: 'PASS',
+        severity: 'info',
+        expected: 'at most one active inbound movement per receipt event identity',
+        actual: 'at most one active inbound movement per receipt event identity',
+        affectedRecordIds: [],
+        evidence: [],
+        remediationHint: 'no action required'
+      };
+    }
+
+    const affected = groups.flatMap((group) => [group.legitimate.id, ...group.duplicates.map((item) => item.id)]);
+    return {
+      checkId: this.checkId,
+      status: 'FAIL',
+      severity: 'critical',
+      expected: 'at most one active inbound movement per receipt event identity',
+      actual: `${groups.length} duplicate event group(s)`,
+      affectedRecordIds: affected,
+      evidence: groups.map((group) => ({
+        table: 'inventory_movements',
+        recordId: group.duplicates[0]?.id ?? group.legitimate.id,
+        field: 'event_identity',
+        expectedValue: group.legitimate.id,
+        actualValue: group.duplicates.map((item) => item.id).join(','),
+        delta: String(group.duplicates.length),
+        reason: `event ${group.eventIdentity} produced ${group.duplicates.length + 1} active movements`
+      })),
+      remediationHint: 'reverse the later duplicate movement; do not reverse the earliest legitimate movement'
+    };
+  }
+}
+
 export const ALL_QUALITY_CHECKS: QualityCheckEvaluator[] = [
   new ConversionFactorPositiveCheck(),
   new BaseQuantityConsistencyCheck(),
   new InventoryValuationConsistencyCheck(),
   new JournalBalanceCheck(),
-  new GrossMarginConsistencyCheck()
+  new GrossMarginConsistencyCheck(),
+  new DuplicateReceiptMovementCheck()
 ];

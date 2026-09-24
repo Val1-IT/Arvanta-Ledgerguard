@@ -39,7 +39,11 @@ export const InventoryMovementRecordSchema = z.object({
   baseQuantity: decimalString,
   unitCost: decimalString,
   totalValue: decimalString,
-  occurredAt: isoDate
+  occurredAt: isoDate,
+  sourceReceiptId: z.string().nullable().optional(),
+  eventIdentity: z.string().nullable().optional(),
+  reversedAt: z.union([isoDate, z.null()]).optional(),
+  reversesId: z.string().nullable().optional()
 });
 export type InventoryMovementRecord = z.infer<typeof InventoryMovementRecordSchema>;
 
@@ -108,6 +112,16 @@ export type BaselineSnapshot = z.infer<typeof BaselineSnapshotSchema>;
 // No Pool, no Drizzle client, no HTTP, no DataHub, no LLM — just data.
 // ---------------------------------------------------------------------------
 
+export const PurchaseReceiptRecordSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  purchaseOrderId: z.string(),
+  productId: z.string(),
+  quantity: decimalString,
+  receivedAt: isoDate
+});
+export type PurchaseReceiptRecord = z.infer<typeof PurchaseReceiptRecordSchema>;
+
 export interface InvestigationInput {
   products: ProductRecord[];
   productUnits: ProductUnitRecord[];
@@ -115,6 +129,7 @@ export interface InvestigationInput {
   valuations: InventoryValuationRecord[];
   journalEntries: JournalEntryRecord[];
   marginReports: GrossMarginReportRecord[];
+  receipts?: PurchaseReceiptRecord[];
   baseline: BaselineSnapshot;
   /**
    * Account code whose debit−credit net is treated as posted COGS.
@@ -154,7 +169,7 @@ export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
 // only (see docs/architecture/financial-integrity-engine.md); a future
 // multi-version product_units history could add a 'product_unit_record' type.
 export const ExpectedValueSourceSchema = z.object({
-  type: z.literal('baseline_snapshot'),
+  type: z.string().min(1),
   recordId: z.string(),
   capturedAt: isoDate,
   evidenceReference: z.string()
@@ -162,8 +177,8 @@ export const ExpectedValueSourceSchema = z.object({
 export type ExpectedValueSource = z.infer<typeof ExpectedValueSourceSchema>;
 
 export const RootCauseSchema = z.object({
-  asset: z.literal('product_units'),
-  field: z.literal('conversion_factor'),
+  asset: z.string().min(1),
+  field: z.string().min(1),
   productId: z.string(),
   unitId: z.string(),
   unitName: z.string(),
@@ -304,7 +319,8 @@ export const ProposedCorrectionActionSchema = z.enum([
   'RECOMPUTE_INVENTORY_MOVEMENT',
   'REGENERATE_INVENTORY_VALUATION',
   'REGENERATE_GROSS_MARGIN_REPORT',
-  'RECONCILE_JOURNAL_ENTRIES'
+  'RECONCILE_JOURNAL_ENTRIES',
+  'REVERSE_INVENTORY_MOVEMENT'
 ]);
 export type ProposedCorrectionAction = z.infer<typeof ProposedCorrectionActionSchema>;
 
@@ -342,7 +358,7 @@ export type VerificationResult = z.infer<typeof VerificationResultSchema>;
 // incident was detected — it is never used to say "everything is fine"
 // (that is overallStatus's job). Today there is exactly one incident category;
 // more will be added to this enum as new detectors are built.
-export const IncidentTypeSchema = z.enum(['UNIT_CONVERSION_MISMATCH']).nullable();
+export const IncidentTypeSchema = z.enum(['UNIT_CONVERSION_MISMATCH', 'DUPLICATE_INVENTORY_MOVEMENT']).nullable();
 export type IncidentType = z.infer<typeof IncidentTypeSchema>;
 
 // overallStatus is the system's aggregate health, derived from qualityChecks

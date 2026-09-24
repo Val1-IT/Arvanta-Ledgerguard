@@ -35,7 +35,7 @@ export function buildBlastRadius(input: BlastRadiusInput): { affectedRecords: Af
     recordCount > 0 || role === 'root_cause' ? { asset: name, role, recordCount } : null;
 
   const assets = [
-    asset('product_units', 'root_cause', 1),
+    asset(input.rootCause.asset, 'root_cause', 1),
     asset('inventory_movements', 'evidence_only', input.affectedMovementIds.length),
     asset('inventory_valuation', 'requires_correction', input.affectedValuationIds.length),
     asset('journal_entries', 'evidence_only', input.affectedJournalEntryIds.length),

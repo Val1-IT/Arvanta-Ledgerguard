@@ -26,11 +26,15 @@ export {
   InventoryValuationConsistencyCheck,
   JournalBalanceCheck,
   GrossMarginConsistencyCheck,
+  DuplicateReceiptMovementCheck,
   ALL_QUALITY_CHECKS
 } from './quality-checks';
 export { buildRemediationPreview, type RemediationPreviewInput } from './remediation-preview';
 export { verifyState } from './verify';
 export { investigate } from './investigate';
+export { duplicateInventoryMovementDetector, findDuplicateMovementGroups } from './detectors/duplicate-inventory-movement';
+export type { IncidentDetector, DetectorHit } from './detectors/types';
+export { DETECTORS } from './detectors/registry';
 export { correctionsMatch, correctionKey } from './lifecycle/corrections-match';
 export {
   executeConstrainedRemediation,

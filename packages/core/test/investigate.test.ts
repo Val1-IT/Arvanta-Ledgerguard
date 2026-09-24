@@ -113,7 +113,7 @@ describe('investigate — conversion factor 12 -> 10 (case 2)', () => {
       expect(evidenceKeys.has(key)).toBe(false);
     }
 
-    expect(report.verificationExpectations.length).toBe(5);
+    expect(report.verificationExpectations.length).toBe(6);
     expect(report.verificationExpectations.every((v) => v.expectedStatus === 'PASS')).toBe(true);
   });
 });

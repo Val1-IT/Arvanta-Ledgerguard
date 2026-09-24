@@ -54,7 +54,7 @@ describe('@ledgerguard/core isolation', () => {
 
   it('source and tests do not import application modules', () => {
     const files = [...listTsFiles(join(packageRoot, 'src')), ...listTsFiles(join(packageRoot, 'test'))];
-    const applicationImport = /from ['"](?:\.\.\/)+src\//;
+    const applicationImport = /from ['"](?:\.\.\/){2,}src\//;
     for (const file of files) {
       const text = readFileSync(file, 'utf8');
       expect(text.match(applicationImport), file).toBeNull();

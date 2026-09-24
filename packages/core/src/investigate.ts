@@ -15,6 +15,7 @@ import { buildFinancialImpact, ZERO_FINANCIAL_IMPACT } from './financial-exposur
 import { ALL_QUALITY_CHECKS } from './quality-checks';
 import { buildRemediationPreview } from './remediation-preview';
 import { formatMoney, formatQuantity, ZERO } from './decimal';
+import { duplicateInventoryMovementDetector } from './detectors/duplicate-inventory-movement';
 import type {
   EvidenceItem,
   IncidentInvestigationReport,
@@ -126,6 +127,44 @@ export function investigate(input: InvestigationInput): IncidentInvestigationRep
   const journalCogsSummary = summarizeJournalCogs(input.journalEntries, cogsAccountCode);
 
   const qualityChecks = ALL_QUALITY_CHECKS.map((check) => check.evaluate(input));
+
+  if (!rootCause) {
+    const duplicate = duplicateInventoryMovementDetector.detect(input);
+    if (duplicate) {
+      const { affectedRecords, blastRadius } = buildBlastRadius({
+        rootCause: duplicate.rootCause,
+        affectedMovementIds: duplicate.affectedMovementIds,
+        affectedValuationIds: duplicate.affectedValuationIds,
+        affectedJournalEntryIds: [],
+        affectedReportIds: []
+      });
+      const recordImpact = buildRecordImpact({
+        affectedMovementIds: duplicate.affectedMovementIds,
+        affectedJournalEntryIds: [],
+        proposedCorrections: duplicate.proposedCorrections
+      });
+      return {
+        incidentType: duplicate.incidentType,
+        overallStatus: 'CRITICAL',
+        rootCause: duplicate.rootCause,
+        affectedRecords,
+        blastRadius,
+        recordImpact,
+        financialImpact: duplicate.financialImpact,
+        evidence: duplicate.evidence,
+        qualityChecks,
+        proposedCorrections: duplicate.proposedCorrections,
+        verificationExpectations:
+          duplicate.verificationExpectations.length > 0
+            ? duplicate.verificationExpectations
+            : ALL_QUALITY_CHECKS.map((check) => ({
+                checkId: check.checkId,
+                expectedStatus: 'PASS',
+                description: `post-repair ${check.checkId} must pass`
+              }))
+      };
+    }
+  }
 
   const affectedMovementIds = movementRecomputes.filter((m) => m.affectedByUnitChange).map((m) => m.movementId);
   const affectedValuationIds = valuationComparisons.filter((v) => v.mismatch).map((v) => v.valuationId);
