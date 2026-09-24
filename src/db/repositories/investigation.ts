@@ -1,0 +1,1 @@
+export { loadInvestigationInput } from '@ledgerguard/postgres';
