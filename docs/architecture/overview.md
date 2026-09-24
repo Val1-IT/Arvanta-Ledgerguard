@@ -5,6 +5,7 @@ This is the system-level map of LedgerGuard. For module-level detail see:
 - [`financial-integrity-engine.md`](financial-integrity-engine.md) — the
   deterministic engine (FASE 4)
 - [`trust-boundary.md`](trust-boundary.md) — DataHub sits outside execution authority
+- [`authority-model.md`](authority-model.md) — policy, capabilities, approval, idempotency
 - [`investigation-agent.md`](investigation-agent.md) — the DataHub-aware agent
   (FASE 5)
 - [`ledgerguard-agent-api.md`](../contracts/ledgerguard-agent-api.md) — the
