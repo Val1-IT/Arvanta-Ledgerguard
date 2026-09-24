@@ -25,4 +25,10 @@ Inventory 10. MOV-001 remains active.
 
 ## Safety
 
-The repair cannot execute without evidence, verification rules, `remediation.execute`, and approval of the exact plan version. A second identical execution does not reverse again.
+The repair cannot execute without evidence, verification rules, `remediation.execute`, and approval of the exact plan version.
+
+A completed idempotency key returns `ALREADY_EXECUTED` and does not open a system-of-record transaction or run a drift check. `DRIFT_DETECTED` is reserved for unexpected live-state changes when the key is not completed.
+
+## v0.1 detector limitation
+
+`investigate()` still prefers conversion mismatch when that root cause is present. Simultaneous independent root causes are not aggregated. Duplicate detection runs only when no conversion-factor incident is found.
