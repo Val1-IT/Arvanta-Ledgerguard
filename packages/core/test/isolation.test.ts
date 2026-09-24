@@ -21,7 +21,8 @@ const FORBIDDEN = [
   'pg',
   'mcp',
   '@modelcontextprotocol/sdk',
-  'acryl-datahub'
+  'acryl-datahub',
+  '@ledgerguard/postgres'
 ] as const;
 
 describe('@ledgerguard/core isolation', () => {
@@ -46,6 +47,15 @@ describe('@ledgerguard/core isolation', () => {
     for (const file of files) {
       const text = readFileSync(file, 'utf8');
       expect(text.match(pattern), file).toBeNull();
+    }
+  });
+
+  it('source and tests do not import application modules', () => {
+    const files = [...listTsFiles(join(packageRoot, 'src')), ...listTsFiles(join(packageRoot, 'test'))];
+    const applicationImport = /from ['"](?:\.\.\/)+src\//;
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      expect(text.match(applicationImport), file).toBeNull();
     }
   });
 });

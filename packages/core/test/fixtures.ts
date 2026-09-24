@@ -1,4 +1,4 @@
-import { ACCOUNT, BASE_DATE, PRODUCT, SCENARIO, UNIT, cf, dayOffset, money, pct, qty } from '../../../src/domain/constants';
+import { ACCOUNT, BASE_DATE, PRODUCT, SCENARIO, UNIT, cf, dayOffset, money, pct, qty } from './scenario-constants';
 import type {
   BaselineSnapshot,
   GrossMarginReportRecord,
@@ -11,12 +11,8 @@ import type {
 } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
-// Builds the exact same healthy-baseline figures as src/db/seed.ts, but as
-// plain in-memory objects instead of database rows — so unit tests exercise
-// the pure engine without a Postgres connection. Every number here is
-// *derived* from the shared demo constants (src/domain/constants.ts), the
-// same constants seed.ts and demo-data/scenarios/conversion-error.ts use —
-// never hand-copied, per the "no invented values" requirement.
+// Builds the conversion-mismatch healthy baseline as in-memory objects so
+// unit tests exercise the pure engine without Postgres or application source.
 // ---------------------------------------------------------------------------
 
 export interface HealthyFixture {
