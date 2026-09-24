@@ -170,6 +170,16 @@ export const remediationPlans = pgTable('remediation_plans', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull()
 });
 
+export const ledgerguardExecutionKeys = pgTable('ledgerguard_execution_keys', {
+  key: text('key').primaryKey(),
+  planId: text('plan_id').notNull(),
+  planVersion: integer('plan_version').notNull(),
+  state: text('state').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  resultJson: text('result_json')
+});
+
 export type ProductRow = typeof products.$inferSelect;
 export type ProductUnitRow = typeof productUnits.$inferSelect;
 export type InventoryMovementRow = typeof inventoryMovements.$inferSelect;

@@ -7,3 +7,9 @@ export { fetchProducts, fetchProductUnits } from './repositories/products';
 export { fetchInventoryMovements, fetchInventoryValuations } from './repositories/inventory';
 export { fetchJournalEntries } from './repositories/journals';
 export { fetchGrossMarginReports, fetchBaselineSnapshot } from './repositories/reports';
+export {
+  PostgresExecutionKeyStore,
+  defaultExecutionKey,
+  type ExecutionKeyReservation,
+  type ExecutionKeyState
+} from './execution-keys';
