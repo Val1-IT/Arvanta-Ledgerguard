@@ -32,6 +32,7 @@
     "db:setup": "npm run db:up && npm run db:wait && npm run db:migrate && npm run db:seed",
     "db:wait": "tsx src/db/wait.ts",
     "scenario:conversion-error": "tsx demo-data/scenarios/conversion-error.ts",
+    "scenario:duplicate-inventory": "tsx examples/inventory-ledger/src/run.ts",
     "example": "tsx scripts/generate-example.ts",
     "example:agent": "tsx scripts/generate-agent-example.ts",
     "datahub:up": "node scripts/py.mjs -m datahub docker quickstart",
