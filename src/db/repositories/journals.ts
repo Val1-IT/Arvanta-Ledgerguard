@@ -1,5 +1,5 @@
 import type { Queryable } from '../queryable';
-import { JournalEntryRecordSchema, type JournalEntryRecord } from '../../engine/types';
+import { JournalEntryRecordSchema, type JournalEntryRecord } from '@ledgerguard/core';
 
 export async function fetchJournalEntries(pool: Queryable): Promise<JournalEntryRecord[]> {
   const { rows } = await pool.query(

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { IncidentInvestigationReport } from '../../../src/engine/types';
+import type { IncidentInvestigationReport } from '@ledgerguard/core';
 import { buildUserPrompt } from '../../../src/agent/prompts/investigation-v1';
 import { buildDataHubContextFixture } from './fixtures';
 

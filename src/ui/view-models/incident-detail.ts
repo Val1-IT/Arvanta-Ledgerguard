@@ -5,7 +5,7 @@ import {
   RecordImpactSchema,
   RecordRefSchema,
   VerificationResultSchema
-} from '../../engine/types';
+} from '@ledgerguard/core';
 import { ApprovalActionSchema, RemediationPlanStateSchema } from '../../remediation/types';
 
 export const UiLabeledUrnSchema = z.object({

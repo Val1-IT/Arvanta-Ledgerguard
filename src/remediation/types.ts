@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProposedCorrectionSchema, VerificationExpectationSchema, VerificationResultSchema } from '../engine/types';
+import { ProposedCorrectionSchema, VerificationExpectationSchema, VerificationResultSchema } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 6 — approval + verified remediation workflow. Types only: no I/O, no

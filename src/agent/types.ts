@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IncidentTypeSchema, OverallHealthStatusSchema, RecordRefSchema } from '../engine/types';
+import { IncidentTypeSchema, OverallHealthStatusSchema, RecordRefSchema } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 5 — DataHub-aware investigation agent. Types only: no I/O, no engine

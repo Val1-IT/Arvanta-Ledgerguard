@@ -1,5 +1,5 @@
 import type { Queryable } from '../queryable';
-import { BaselineSnapshotSchema, GrossMarginReportRecordSchema, type BaselineSnapshot, type GrossMarginReportRecord } from '../../engine/types';
+import { BaselineSnapshotSchema, GrossMarginReportRecordSchema, type BaselineSnapshot, type GrossMarginReportRecord } from '@ledgerguard/core';
 
 export async function fetchGrossMarginReports(pool: Queryable): Promise<GrossMarginReportRecord[]> {
   const { rows } = await pool.query(

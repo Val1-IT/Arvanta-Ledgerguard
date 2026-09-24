@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { investigate } from '../engine/investigate';
-import type { IncidentInvestigationReport } from '../engine/types';
+import { investigate, type IncidentInvestigationReport } from '@ledgerguard/core';
 import { loadInvestigationInput } from '../db/repositories/investigation';
 import { saveInvestigationRun } from '../db/repositories/investigation-runs';
 import { ActivityLogger } from './activity-log';

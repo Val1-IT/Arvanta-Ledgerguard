@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import { SCHEMA_VERSION as AGENT_SCHEMA_VERSION, type InvestigationRunRecord } from '../../agent/types';
 import { saveInvestigationRun } from '../../db/repositories/investigation-runs';
 import { loadInvestigationInput } from '../../db/repositories/investigation';
-import { investigate } from '../../engine/investigate';
+import { investigate } from '@ledgerguard/core';
 
 /**
  * Demo-only fallback when the full agent cannot complete (e.g. MCP unavailable).

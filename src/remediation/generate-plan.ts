@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { investigate } from '../engine/investigate';
+import { investigate } from '@ledgerguard/core';
 import { loadInvestigationInput } from '../db/repositories/investigation';
 import { loadInvestigationRun } from '../db/repositories/investigation-runs';
 import { SCHEMA_VERSION, type RemediationPlanRecord } from './types';

@@ -4,7 +4,7 @@ import {
   InventoryValuationRecordSchema,
   type InventoryMovementRecord,
   type InventoryValuationRecord
-} from '../../engine/types';
+} from '@ledgerguard/core';
 
 export async function fetchInventoryMovements(pool: Queryable): Promise<InventoryMovementRecord[]> {
   const { rows } = await pool.query(

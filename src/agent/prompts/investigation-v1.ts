@@ -1,4 +1,4 @@
-import type { IncidentInvestigationReport } from '../../engine/types';
+import type { IncidentInvestigationReport } from '@ledgerguard/core';
 import { SCHEMA_VERSION, type DataHubContext } from '../types';
 
 // ---------------------------------------------------------------------------

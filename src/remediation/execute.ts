@@ -1,9 +1,11 @@
 import type { Pool, PoolClient } from 'pg';
-import { investigate } from '../engine/investigate';
-import { verifyState } from '../engine/verify';
-import { formatMoney } from '../engine/decimal';
-import { summarizeJournalCogs } from '../engine/journal-impact';
-import type { ProposedCorrection } from '../engine/types';
+import {
+  formatMoney,
+  investigate,
+  summarizeJournalCogs,
+  verifyState,
+  type ProposedCorrection
+} from '@ledgerguard/core';
 import { loadInvestigationInput } from '../db/repositories/investigation';
 import { fetchJournalEntries } from '../db/repositories/journals';
 import { applyRemediationPlanTransition, loadRemediationPlan } from '../db/repositories/remediation-plans';

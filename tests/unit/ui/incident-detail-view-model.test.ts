@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { InvestigationRunRecord } from '../../../src/agent/types';
-import type { IncidentInvestigationReport } from '../../../src/engine/types';
+import type { IncidentInvestigationReport } from '@ledgerguard/core';
 import { buildIncidentDetailViewModel } from '../../../src/ui/server/incident-detail';
 
 const root = resolve(process.cwd());

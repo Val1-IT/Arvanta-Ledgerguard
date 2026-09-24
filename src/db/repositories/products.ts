@@ -1,5 +1,5 @@
 import type { Queryable } from '../queryable';
-import { ProductRecordSchema, ProductUnitRecordSchema, type ProductRecord, type ProductUnitRecord } from '../../engine/types';
+import { ProductRecordSchema, ProductUnitRecordSchema, type ProductRecord, type ProductUnitRecord } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // Repository adapters: thin, injected-Pool query functions that map snake_case

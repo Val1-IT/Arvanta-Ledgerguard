@@ -1,7 +1,6 @@
 import type { Pool } from 'pg';
 import { loadInvestigationInput } from '../../db/repositories/investigation';
-import { investigate } from '../../engine/investigate';
-import { verifyState } from '../../engine/verify';
+import { investigate, verifyState } from '@ledgerguard/core';
 import { isDemoModeEnabled } from '../lib/demo-mode';
 import { formatIdrDisplay, formatPercentDisplay } from '../lib/format-display';
 import {

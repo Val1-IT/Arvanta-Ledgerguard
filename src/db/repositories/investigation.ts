@@ -1,5 +1,5 @@
 import type { Queryable } from '../queryable';
-import type { InvestigationInput } from '../../engine/types';
+import type { InvestigationInput } from '@ledgerguard/core';
 import { fetchProducts, fetchProductUnits } from './products';
 import { fetchInventoryMovements, fetchInventoryValuations } from './inventory';
 import { fetchJournalEntries } from './journals';
