@@ -26,6 +26,7 @@ import {
   RemediationPlanNotFoundError,
   isTransitionAllowed,
   type ExecutionFailureReason,
+  type RemediationExecutionOutcome,
   type RemediationExecutionResult,
   type RemediationPlanRecord
 } from './types';
@@ -54,10 +55,15 @@ function impactFromPlan(plan: RemediationPlanRecord): number {
   }, 0);
 }
 
+export interface ExecuteRemediationPlanResult {
+  plan: RemediationPlanRecord;
+  outcome: RemediationExecutionOutcome;
+}
+
 export async function executeRemediationPlan(
   input: ExecuteRemediationPlanInput,
   deps: ExecuteRemediationPlanDeps
-): Promise<RemediationPlanRecord> {
+): Promise<ExecuteRemediationPlanResult> {
   const { pool } = deps;
   const now = deps.now ?? (() => new Date());
   const authority = assertTrustedExecutor(deps.authority);
@@ -72,6 +78,17 @@ export async function executeRemediationPlan(
   const idempotencyKey = input.idempotencyKey ?? defaultExecutionKey(plan.id, input.expectedVersion);
   const existingKey = await keys.get(idempotencyKey);
 
+  if (existingKey?.state === 'completed') {
+    audit.append({
+      occurredAt: now().toISOString(),
+      type: 'idempotency.duplicate',
+      actorId: authority.actorId,
+      planId: plan.id,
+      payload: { idempotencyKey, outcome: 'ALREADY_EXECUTED' }
+    });
+    return { plan, outcome: 'ALREADY_EXECUTED' };
+  }
+
   const decision = evaluateExecutionPolicy({
     evidenceCount: plan.proposedCorrections.length,
     verificationExpectationCount: plan.verificationExpectations.length,
@@ -85,7 +102,7 @@ export async function executeRemediationPlan(
     },
     expectedVersion: input.expectedVersion,
     config: policyConfig,
-    idempotencyCompleted: existingKey?.state === 'completed'
+    idempotencyCompleted: false
   });
 
   audit.append({
@@ -104,16 +121,6 @@ export async function executeRemediationPlan(
   });
 
   if (decision.outcome === 'DENY') {
-    if (decision.reasons.some((reason) => reason.code === 'DUPLICATE_EXECUTION')) {
-      audit.append({
-        occurredAt: now().toISOString(),
-        type: 'idempotency.duplicate',
-        actorId: authority.actorId,
-        planId: plan.id,
-        payload: { idempotencyKey }
-      });
-      return plan;
-    }
     throw new PolicyDeniedError('Policy denied execution', decision);
   }
   if (decision.outcome === 'REQUIRE_APPROVAL') {
@@ -136,9 +143,9 @@ export async function executeRemediationPlan(
       type: 'idempotency.duplicate',
       actorId: authority.actorId,
       planId: plan.id,
-      payload: { idempotencyKey }
+      payload: { idempotencyKey, outcome: 'ALREADY_EXECUTED' }
     });
-    return (await loadRemediationPlan(pool, plan.id)) ?? plan;
+    return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
   }
   if (reservation === 'in_flight') {
     throw new ConcurrentExecutionError();
@@ -189,7 +196,8 @@ export async function executeRemediationPlan(
     finishedAt,
     steps: result.steps,
     failureReason,
-    failureDetail: result.failureDetail
+    failureDetail: result.failureDetail,
+    outcome: result.committed ? 'EXECUTED' : undefined
   };
 
   if (result.committed && result.verification) {
@@ -201,13 +209,14 @@ export async function executeRemediationPlan(
       planId: plan.id,
       payload: { verification: result.verification.overallStatus }
     });
-    return applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
+    const resolved = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
       state: 'RESOLVED',
       updatedAt: finishedAt,
-      executionResultJson: JSON.stringify(executionResult),
+      executionResultJson: JSON.stringify({ ...executionResult, outcome: 'EXECUTED' }),
       executedAt: finishedAt,
       verificationJson: JSON.stringify({ verifiedAt: finishedAt, result: result.verification })
     });
+    return { plan: resolved, outcome: 'EXECUTED' };
   }
 
   await keys.failRetryable(idempotencyKey, now(), { status: 'FAILED_RETRYABLE', failureReason });
@@ -224,7 +233,7 @@ export async function executeRemediationPlan(
       ? 'VERIFICATION_FAILED'
       : 'EXECUTION_FAILED';
 
-  return applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
+  const failed = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
     state: terminalState,
     updatedAt: finishedAt,
     executionResultJson: JSON.stringify(executionResult),
@@ -233,4 +242,5 @@ export async function executeRemediationPlan(
       ? { verificationJson: JSON.stringify({ verifiedAt: finishedAt, result: result.verification }) }
       : {})
   });
+  return { plan: failed, outcome: 'FAILED' };
 }

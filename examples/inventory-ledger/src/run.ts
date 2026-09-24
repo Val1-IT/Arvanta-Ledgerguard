@@ -199,7 +199,25 @@ async function main() {
   });
 
   const replay = await executeConstrainedRemediation(adapter, { approvedCorrections: report.proposedCorrections });
-  log('Idempotent replay', { committed: replay.committed, failureReason: replay.failureReason });
+  log('Genuine drift (adapter replay without completed key)', {
+    committed: replay.committed,
+    failureReason: replay.failureReason
+  });
+
+  const completedKeyPolicy = evaluateExecutionPolicy({
+    evidenceCount: report.evidence.length,
+    verificationExpectationCount: report.verificationExpectations.length,
+    impactAmount: Number(report.financialImpact.primaryExposure),
+    authority,
+    plan: { state: 'APPROVED', version: 2, approvalAction: 'APPROVE', approvedBy: 'controller' },
+    expectedVersion: 2,
+    config: { financialApprovalThreshold: 1000, currency: 'IDR' },
+    idempotencyCompleted: true
+  });
+  log('Completed-key replay (idempotency, no drift check)', {
+    outcome: completedKeyPolicy.outcome,
+    codes: completedKeyPolicy.reasons.map((reason) => reason.code)
+  });
 }
 
 main().catch((error) => {

@@ -136,10 +136,22 @@ export async function executeRemediationPlanAction(input: {
 }): Promise<RemediationActionResult> {
   try {
     assertDemoMode('Execute remediation plan');
-    let plan = await executeRemediationPlan(
+    const executed = await executeRemediationPlan(
       { planId: input.planId, expectedVersion: input.expectedVersion },
       { pool: getServerPool(), authority: incidentUiAuthority() }
     );
+    let plan = executed.plan;
+
+    if (executed.outcome === 'ALREADY_EXECUTED') {
+      revalidateIncident(input.investigationId);
+      return {
+        ok: true,
+        planId: plan.id,
+        state: plan.state,
+        version: plan.version,
+        message: 'This approved execution was already completed. No additional mutation was applied.'
+      };
+    }
 
     // Best-effort DataHub sync immediately after a verified ERP restore so the
     // Resolution tab does not stay on "Not attempted" when GMS/MCP is healthy.

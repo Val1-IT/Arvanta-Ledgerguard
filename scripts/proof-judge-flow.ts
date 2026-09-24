@@ -69,10 +69,10 @@ async function main(): Promise<void> {
       { planId: approved.id, expectedVersion: approved.version },
       { pool, authority }
     );
-    if (executed.state !== 'RESOLVED' || executed.verification?.result.overallStatus !== 'PASS') {
-      throw new Error(`Transactional remediation did not resolve: ${executed.state}`);
+    if (executed.plan.state !== 'RESOLVED' || executed.plan.verification?.result.overallStatus !== 'PASS') {
+      throw new Error(`Transactional remediation did not resolve: ${executed.plan.state}`);
     }
-    const synced = await writebackRemediationResolution({ planId: executed.id }, { pool });
+    const synced = await writebackRemediationResolution({ planId: executed.plan.id }, { pool });
     if (synced.datahubWriteback?.outcome !== 'SYNCED') {
       throw new Error(`Live DataHub resolution write-back did not sync: ${synced.datahubWriteback?.message ?? 'unknown failure'}`);
     }

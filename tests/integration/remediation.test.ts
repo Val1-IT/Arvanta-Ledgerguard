@@ -286,12 +286,13 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
       { pool, authority: testHarnessAuthority() }
     );
 
-    expect(resolved.state).toBe('RESOLVED');
-    expect(resolved.verification?.result.overallStatus).toBe('PASS');
-    expect(resolved.executionResult?.failureReason).toBeNull();
-    expect(resolved.executionResult?.steps.every((s) => s.status === 'APPLIED')).toBe(true);
-    expect(resolved.executionResult?.steps.map((s) => s.sequence)).toEqual(
-      [...resolved.executionResult!.steps].map((s) => s.sequence).sort((a, b) => a - b)
+    expect(resolved.outcome).toBe('EXECUTED');
+    expect(resolved.plan.state).toBe('RESOLVED');
+    expect(resolved.plan.verification?.result.overallStatus).toBe('PASS');
+    expect(resolved.plan.executionResult?.failureReason).toBeNull();
+    expect(resolved.plan.executionResult?.steps.every((s) => s.status === 'APPLIED')).toBe(true);
+    expect(resolved.plan.executionResult?.steps.map((s) => s.sequence)).toEqual(
+      [...resolved.plan.executionResult!.steps].map((s) => s.sequence).sort((a, b) => a - b)
     );
 
     const after = await snapshotErp(pool);
@@ -323,8 +324,9 @@ describe('FASE 6 remediation workflow against real Postgres', () => {
       { pool, authority: testHarnessAuthority() }
     );
 
-    expect(failed.state).toBe('EXECUTION_FAILED');
-    expect(failed.executionResult?.failureReason).toBe('DRIFT_DETECTED');
+    expect(failed.outcome).toBe('FAILED');
+    expect(failed.plan.state).toBe('EXECUTION_FAILED');
+    expect(failed.plan.executionResult?.failureReason).toBe('DRIFT_DETECTED');
 
     const after = await snapshotErp(pool);
     expect(after).toEqual(drifted);
