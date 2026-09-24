@@ -29,6 +29,13 @@
       "when": 1785120000000,
       "tag": "0003_execution_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785123600000,
+      "tag": "0004_duplicate_inventory",
+      "breakpoints": true
     }
   ]
 }

@@ -45,7 +45,29 @@ export const inventoryMovements = pgTable('inventory_movements', {
   baseQuantity: numeric('base_quantity', { precision: 18, scale: 3 }).notNull(),
   unitCost: numeric('unit_cost', { precision: 18, scale: 2 }).notNull(),
   totalValue: numeric('total_value', { precision: 18, scale: 2 }).notNull(),
-  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull()
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  sourceReceiptId: text('source_receipt_id'),
+  eventIdentity: text('event_identity'),
+  reversedAt: timestamp('reversed_at', { withTimezone: true }),
+  reversesId: text('reverses_id')
+});
+
+export const purchaseOrders = pgTable('purchase_orders', {
+  id: text('id').primaryKey(),
+  number: text('number').notNull(),
+  vendorName: text('vendor_name').notNull(),
+  productId: text('product_id').notNull(),
+  quantity: numeric('quantity', { precision: 18, scale: 3 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+});
+
+export const purchaseReceipts = pgTable('purchase_receipts', {
+  id: text('id').primaryKey(),
+  number: text('number').notNull(),
+  purchaseOrderId: text('purchase_order_id').notNull(),
+  productId: text('product_id').notNull(),
+  quantity: numeric('quantity', { precision: 18, scale: 3 }).notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull()
 });
 
 export const inventoryValuation = pgTable('inventory_valuation', {

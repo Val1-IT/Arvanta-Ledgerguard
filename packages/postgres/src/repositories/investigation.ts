@@ -4,6 +4,7 @@ import { fetchProducts, fetchProductUnits } from './products';
 import { fetchInventoryMovements, fetchInventoryValuations } from './inventory';
 import { fetchJournalEntries } from './journals';
 import { fetchGrossMarginReports, fetchBaselineSnapshot } from './reports';
+import { fetchPurchaseReceipts } from './receipts';
 
 /**
  * Assembles InvestigationInput from the live database. Read-only: issues
@@ -21,15 +22,17 @@ export async function loadInvestigationInput(
   pool: Queryable,
   options: { cogsAccountCode?: string } = {}
 ): Promise<InvestigationInput> {
-  const [products, productUnits, movements, valuations, journalEntries, marginReports, baseline] = await Promise.all([
-    fetchProducts(pool),
-    fetchProductUnits(pool),
-    fetchInventoryMovements(pool),
-    fetchInventoryValuations(pool),
-    fetchJournalEntries(pool),
-    fetchGrossMarginReports(pool),
-    fetchBaselineSnapshot(pool)
-  ]);
+  const [products, productUnits, movements, valuations, journalEntries, marginReports, receipts, baseline] =
+    await Promise.all([
+      fetchProducts(pool),
+      fetchProductUnits(pool),
+      fetchInventoryMovements(pool),
+      fetchInventoryValuations(pool),
+      fetchJournalEntries(pool),
+      fetchGrossMarginReports(pool),
+      fetchPurchaseReceipts(pool),
+      fetchBaselineSnapshot(pool)
+    ]);
 
   return {
     products,
@@ -38,6 +41,7 @@ export async function loadInvestigationInput(
     valuations,
     journalEntries,
     marginReports,
+    receipts,
     baseline,
     cogsAccountCode: options.cogsAccountCode
   };

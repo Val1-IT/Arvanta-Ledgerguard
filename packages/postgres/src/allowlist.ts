@@ -1,6 +1,6 @@
 export const WRITABLE_COLUMNS: Readonly<Record<string, ReadonlySet<string>>> = {
   product_units: new Set(['conversion_factor']),
-  inventory_movements: new Set(['base_quantity']),
+  inventory_movements: new Set(['base_quantity', 'reversed_at']),
   inventory_valuation: new Set(['quantity_on_hand', 'average_cost', 'inventory_value']),
   gross_margin_report: new Set(['cost_of_goods_sold', 'gross_profit', 'gross_margin_percentage'])
 };

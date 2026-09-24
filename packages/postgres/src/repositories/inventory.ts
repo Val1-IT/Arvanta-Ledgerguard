@@ -10,7 +10,9 @@ export async function fetchInventoryMovements(pool: Queryable): Promise<Inventor
   const { rows } = await pool.query(
     `select id, product_id as "productId", movement_type as "movementType", quantity, unit_name as "unitName",
             base_quantity as "baseQuantity", unit_cost as "unitCost", total_value as "totalValue",
-            occurred_at as "occurredAt"
+            occurred_at as "occurredAt",
+            source_receipt_id as "sourceReceiptId", event_identity as "eventIdentity",
+            reversed_at as "reversedAt", reverses_id as "reversesId"
        from inventory_movements
       order by occurred_at, id`
   );

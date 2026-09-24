@@ -41,6 +41,28 @@ export async function applyAllowlistedCorrection(
     return { ...base, status: 'APPLIED', detail: `confirmed ledger-posted COGS still matches: ${liveCogs}` };
   }
 
+  if (correction.action === 'REVERSE_INVENTORY_MOVEMENT') {
+    if (!isWritableColumn('inventory_movements', 'reversed_at')) {
+      throw new UnallowlistedMutationError(correction.table, correction.field, correction.action);
+    }
+    const { rowCount } = await client.query(
+      `update inventory_movements
+          set reversed_at = $1::timestamptz
+        where id = $2 and reversed_at is null`,
+      [correction.afterValue, correction.recordId]
+    );
+    if (rowCount !== 1) {
+      throw new Error(
+        `expected to reverse exactly one active movement (id=${correction.recordId}) but affected ${rowCount}`
+      );
+    }
+    return {
+      ...base,
+      status: 'APPLIED',
+      detail: `${correction.field}: ${correction.beforeValue} -> ${correction.afterValue}`
+    };
+  }
+
   if (!isWritableColumn(correction.table, correction.field)) {
     throw new UnallowlistedMutationError(correction.table, correction.field, correction.action);
   }

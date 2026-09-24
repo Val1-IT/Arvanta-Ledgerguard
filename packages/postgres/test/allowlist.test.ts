@@ -33,6 +33,7 @@ describe('PostgreSQL allowlisted mutations', () => {
     expect(isWritableColumn('journal_entries', 'debit')).toBe(false);
     expect(isWritableColumn('product_units', 'id')).toBe(false);
     expect(isWritableColumn('product_units', 'conversion_factor')).toBe(true);
+    expect(isWritableColumn('inventory_movements', 'reversed_at')).toBe(true);
   });
 
   it('throws UnallowlistedMutationError before issuing SQL', async () => {
