@@ -4,6 +4,7 @@
   "private": true,
   "description": "Autonomous ERP financial-integrity agent powered by DataHub context. Detects, traces, explains, and safely remediates the financial-statement impact of operational data errors.",
   "license": "Apache-2.0",
+  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20"
   },
@@ -11,9 +12,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm --filter @ledgerguard/core typecheck",
     "lint": "next lint",
     "test": "vitest run",
+    "test:core": "pnpm --filter @ledgerguard/core test",
     "test:watch": "vitest",
     "test:ui": "vitest run tests/unit/ui",
     "test:e2e": "playwright test",
