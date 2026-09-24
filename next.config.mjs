@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  transpilePackages: ['@ledgerguard/core'],
+  transpilePackages: ['@ledgerguard/core', '@ledgerguard/postgres'],
   eslint: {
     // Lint is run explicitly via `npm run lint` in CI; do not block builds on it.
     ignoreDuringBuilds: true

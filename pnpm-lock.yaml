@@ -14,6 +14,9 @@ importers:
       '@ledgerguard/core':
         specifier: workspace:*
         version: link:packages/core
+      '@ledgerguard/postgres':
+        specifier: workspace:*
+        version: link:packages/postgres
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0
@@ -100,6 +103,25 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/postgres:
+    dependencies:
+      '@ledgerguard/core':
+        specifier: workspace:*
+        version: link:../core
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

@@ -13,11 +13,14 @@ import { fetchGrossMarginReports, fetchBaselineSnapshot } from './reports';
  * a separate, explicitly-invoked function — not folded into this one.
  *
  * Accepts a Queryable (Pool or PoolClient) so it can also be called mid-
- * transaction — see src/remediation/execute.ts, which re-runs this against
- * the in-progress transaction client for pre-commit drift detection and
+ * transaction — PostgresSystemOfRecordAdapter re-runs this against the
+ * in-progress transaction client for pre-commit drift detection and
  * post-write verification.
  */
-export async function loadInvestigationInput(pool: Queryable): Promise<InvestigationInput> {
+export async function loadInvestigationInput(
+  pool: Queryable,
+  options: { cogsAccountCode?: string } = {}
+): Promise<InvestigationInput> {
   const [products, productUnits, movements, valuations, journalEntries, marginReports, baseline] = await Promise.all([
     fetchProducts(pool),
     fetchProductUnits(pool),
@@ -28,5 +31,14 @@ export async function loadInvestigationInput(pool: Queryable): Promise<Investiga
     fetchBaselineSnapshot(pool)
   ]);
 
-  return { products, productUnits, movements, valuations, journalEntries, marginReports, baseline };
+  return {
+    products,
+    productUnits,
+    movements,
+    valuations,
+    journalEntries,
+    marginReports,
+    baseline,
+    cogsAccountCode: options.cogsAccountCode
+  };
 }
