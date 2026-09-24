@@ -11,6 +11,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.114.0
         version: 0.114.0(zod@3.25.76)
+      '@ledgerguard/core':
+        specifier: workspace:*
+        version: link:packages/core
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0

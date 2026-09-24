@@ -46,6 +46,7 @@
     "test:agent": "vitest run tests/unit/agent && vitest run --config vitest.datahub.config.ts tests/datahub/agent-orchestrator.test.ts tests/datahub/live-model-smoke.test.ts"
   },
   "dependencies": {
+    "@ledgerguard/core": "workspace:*",
     "@anthropic-ai/sdk": "^0.114.0",
     "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.36.4",
