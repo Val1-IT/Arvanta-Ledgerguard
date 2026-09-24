@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { toDecimal, ZERO } from '../../../src/engine/decimal';
-import { expectedFactorMap, recomputeMovements, recomputeValuations } from '../../../src/engine/inventory-impact';
-import { buildFinancialImpact } from '../../../src/engine/financial-exposure';
-import type { BaselineSnapshot, InventoryMovementRecord } from '../../../src/engine/types';
+import {
+  buildFinancialImpact,
+  expectedFactorMap,
+  recomputeMovements,
+  recomputeValuations,
+  toDecimal,
+  ZERO,
+  type BaselineSnapshot,
+  type InventoryMovementRecord
+} from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 5 pre-flight requirement: before any DataHub-aware orchestration is

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Decimal } from '../../../src/engine/decimal';
-import { buildFinancialImpact, ZERO_FINANCIAL_IMPACT } from '../../../src/engine/financial-exposure';
+import { buildFinancialImpact, Decimal, ZERO_FINANCIAL_IMPACT } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 4.1 requirement 1 — financial exposure must not double-count a single

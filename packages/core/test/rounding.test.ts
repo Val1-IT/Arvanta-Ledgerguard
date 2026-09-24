@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney } from '../../../src/engine/decimal';
-import { expectedFactorMap, recomputeMovements, recomputeValuations } from '../../../src/engine/inventory-impact';
-import type { BaselineSnapshot, InventoryMovementRecord } from '../../../src/engine/types';
+import {
+  expectedFactorMap,
+  formatMoney,
+  recomputeMovements,
+  recomputeValuations,
+  type BaselineSnapshot,
+  type InventoryMovementRecord
+} from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // Case 8 — rounding edge case. A single CARTON factor of 3 turns a purchase

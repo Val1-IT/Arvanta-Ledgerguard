@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { investigate } from '../../../src/engine/investigate';
-import { ConversionFactorPositiveCheck, JournalBalanceCheck } from '../../../src/engine/quality-checks';
-import { verifyState } from '../../../src/engine/verify';
+import {
+  ConversionFactorPositiveCheck,
+  investigate,
+  JournalBalanceCheck,
+  verifyState
+} from '@ledgerguard/core';
 import { buildHealthyFixture, toInvestigationInput } from './fixtures';
 
 describe('ConversionFactorPositiveCheck — zero factor (case 4)', () => {

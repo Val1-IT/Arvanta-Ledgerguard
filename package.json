@@ -14,7 +14,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit && pnpm --filter @ledgerguard/core typecheck",
     "lint": "next lint",
-    "test": "vitest run",
+    "test": "vitest run && pnpm --filter @ledgerguard/core test",
     "test:core": "pnpm --filter @ledgerguard/core test",
     "test:watch": "vitest",
     "test:ui": "vitest run tests/unit/ui",

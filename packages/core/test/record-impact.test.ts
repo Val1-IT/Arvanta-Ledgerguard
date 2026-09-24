@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRecordImpact } from '../../../src/engine/record-impact';
-import type { ProposedCorrection } from '../../../src/engine/types';
+import { buildRecordImpact, type ProposedCorrection } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 4.1 requirement 2 — evidence records (proof, never mutated) must never

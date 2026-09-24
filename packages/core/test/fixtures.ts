@@ -8,7 +8,7 @@ import type {
   JournalEntryRecord,
   ProductRecord,
   ProductUnitRecord
-} from '../../../src/engine/types';
+} from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // Builds the exact same healthy-baseline figures as src/db/seed.ts, but as

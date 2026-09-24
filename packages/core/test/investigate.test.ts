@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { investigate } from '../../../src/engine/investigate';
+import { investigate } from '@ledgerguard/core';
 import { applyConversionErrorToFixture, buildHealthyFixture, toInvestigationInput } from './fixtures';
 
 describe('investigate — healthy baseline (case 1)', () => {
