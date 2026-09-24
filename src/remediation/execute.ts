@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import {
+  CONVERSION_MISMATCH_EXAMPLE,
   formatMoney,
   investigate,
   summarizeJournalCogs,
@@ -105,7 +106,7 @@ async function applyCorrectionWrite(
     // still holds; if the ledger itself moved underneath us, that is a
     // genuine abort condition, not something to paper over.
     const entries = await fetchJournalEntries(client);
-    const liveCogs = formatMoney(summarizeJournalCogs(entries).postedCogs);
+    const liveCogs = formatMoney(summarizeJournalCogs(entries, CONVERSION_MISMATCH_EXAMPLE.cogsAccountCode).postedCogs);
     if (liveCogs !== correction.beforeValue) {
       throw new Error(
         `journal-posted COGS changed since the plan was generated (was ${correction.beforeValue}, now ${liveCogs}) — refusing to proceed`

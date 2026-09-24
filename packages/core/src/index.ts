@@ -14,6 +14,7 @@ export {
   type CorrectValuation,
   type ValuationComparison
 } from './inventory-impact';
+export { CONVERSION_MISMATCH_EXAMPLE } from './example-config';
 export { checkJournalBalance, summarizeJournalCogs, type JournalBalanceResult, type JournalCogsSummary } from './journal-impact';
 export { compareMarginReports, formatMarginComparison, type MarginComparison } from './margin-impact';
 export { buildBlastRadius, type BlastRadiusInput } from './blast-radius';
@@ -30,3 +31,19 @@ export {
 export { buildRemediationPreview, type RemediationPreviewInput } from './remediation-preview';
 export { verifyState } from './verify';
 export { investigate } from './investigate';
+export { correctionsMatch, correctionKey } from './lifecycle/corrections-match';
+export {
+  executeConstrainedRemediation,
+  DriftDetectedError,
+  VerificationFailedError,
+  type ExecuteConstrainedRemediationInput
+} from './lifecycle/execute-constrained-remediation';
+export type {
+  SystemOfRecordAdapter,
+  SystemOfRecordSession,
+  SystemOfRecordMeta,
+  CorrectionStepResult,
+  ConstrainedRemediationResult,
+  ConstrainedRemediationFailureReason
+} from './ports/system-of-record';
+export { CorrectionStepStatus } from './ports/system-of-record';

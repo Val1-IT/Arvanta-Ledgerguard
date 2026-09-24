@@ -116,6 +116,12 @@ export interface InvestigationInput {
   journalEntries: JournalEntryRecord[];
   marginReports: GrossMarginReportRecord[];
   baseline: BaselineSnapshot;
+  /**
+   * Account code whose debit−credit net is treated as posted COGS.
+   * When omitted, investigate() uses CONVERSION_MISMATCH_EXAMPLE.cogsAccountCode
+   * so the existing conversion-mismatch scenario stays compatible.
+   */
+  cogsAccountCode?: string;
 }
 
 // Quality checks only need the slice of InvestigationInput relevant to

@@ -7,6 +7,7 @@ import {
   type ValuationComparison
 } from './inventory-impact';
 import { compareMarginReports, type MarginComparison } from './margin-impact';
+import { CONVERSION_MISMATCH_EXAMPLE } from './example-config';
 import { summarizeJournalCogs } from './journal-impact';
 import { buildBlastRadius } from './blast-radius';
 import { buildRecordImpact, ZERO_RECORD_IMPACT } from './record-impact';
@@ -121,7 +122,8 @@ export function investigate(input: InvestigationInput): IncidentInvestigationRep
 
   const valuationComparisons = compareValuations(input.valuations, correctByProduct);
   const marginComparisons = compareMarginReports(input.marginReports, correctValuations);
-  const journalCogsSummary = summarizeJournalCogs(input.journalEntries);
+  const cogsAccountCode = input.cogsAccountCode ?? CONVERSION_MISMATCH_EXAMPLE.cogsAccountCode;
+  const journalCogsSummary = summarizeJournalCogs(input.journalEntries, cogsAccountCode);
 
   const qualityChecks = ALL_QUALITY_CHECKS.map((check) => check.evaluate(input));
 

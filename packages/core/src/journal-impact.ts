@@ -1,10 +1,6 @@
 import { Decimal, formatMoney, toDecimal, ZERO } from './decimal';
 import type { JournalEntryRecord } from './types';
 
-// Default COGS account for the conversion-mismatch demo (src/domain/constants ACCOUNT.COGS).
-// Callers may pass a different code; the engine must not import the demo domain package.
-const DEFAULT_COGS_ACCOUNT_CODE = '5110';
-
 // ---------------------------------------------------------------------------
 // Journal entries are intentionally left untouched by the conversion-error
 // scenario (see demo-data/scenarios/conversion-error.ts) — they remain
@@ -77,10 +73,7 @@ export interface JournalCogsSummary {
   entryIds: string[];
 }
 
-export function summarizeJournalCogs(
-  entries: JournalEntryRecord[],
-  cogsAccountCode: string = DEFAULT_COGS_ACCOUNT_CODE
-): JournalCogsSummary {
+export function summarizeJournalCogs(entries: JournalEntryRecord[], cogsAccountCode: string): JournalCogsSummary {
   let postedCogs = ZERO;
   const entryIds: string[] = [];
 
