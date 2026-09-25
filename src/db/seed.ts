@@ -36,6 +36,7 @@ import {
 async function truncateAll(pool: Pool): Promise<void> {
   await pool.query(`
     truncate table
+      ledgerguard_execution_keys,
       remediation_plans,
       investigation_runs,
       ledgerguard_incidents,
@@ -44,6 +45,8 @@ async function truncateAll(pool: Pool): Promise<void> {
       journal_entries,
       inventory_valuation,
       inventory_movements,
+      purchase_receipts,
+      purchase_orders,
       product_units,
       products
     restart identity cascade;
