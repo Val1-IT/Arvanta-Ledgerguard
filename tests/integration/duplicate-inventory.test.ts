@@ -62,7 +62,7 @@ async function seedCompletedInvestigation(pool: Pool): Promise<string> {
   return investigationId;
 }
 
-function skipValuationWrites(inner: PostgresSystemOfRecordAdapter): SystemOfRecordAdapter {
+function skipReverseWrites(inner: PostgresSystemOfRecordAdapter): SystemOfRecordAdapter {
   return {
     meta: inner.meta,
     runInTransaction<T>(work: (session: SystemOfRecordSession) => Promise<T>): Promise<T> {
@@ -70,14 +70,14 @@ function skipValuationWrites(inner: PostgresSystemOfRecordAdapter): SystemOfReco
         work({
           loadInvestigationInput: () => session.loadInvestigationInput(),
           applyCorrection: async (correction, now) => {
-            if (correction.table === 'inventory_valuation') {
+            if (correction.action === 'REVERSE_INVENTORY_MOVEMENT') {
               return {
                 sequence: correction.sequence,
                 action: correction.action,
                 table: correction.table,
                 recordId: correction.recordId,
                 status: 'APPLIED',
-                detail: 'intentionally skipped so verification fails'
+                detail: 'intentionally skipped so duplicate remains and verification fails'
               };
             }
             return session.applyCorrection(correction, now);
@@ -195,7 +195,7 @@ describe('duplicate inventory movement against real Postgres', () => {
       { authority: testHarnessAuthority() }
     );
 
-    const adapter = skipValuationWrites(new PostgresSystemOfRecordAdapter(pool));
+    const adapter = skipReverseWrites(new PostgresSystemOfRecordAdapter(pool));
     const failed = await executeRemediationPlan(
       { planId: approved.id, expectedVersion: approved.version },
       { pool, authority: testHarnessAuthority(), adapter }
