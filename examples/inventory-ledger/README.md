@@ -27,7 +27,13 @@ Inventory 10. MOV-001 untouched.
 
 evidence → policy (`REQUIRE_APPROVAL` above threshold) → trusted authority → approval of exact plan version → idempotency → transaction → verify → commit. A second run is `DRIFT_DETECTED` / no further reversal.
 
-Run:
+In-memory harness (no Docker):
+
+```
+pnpm scenario:duplicate-inventory:memory
+```
+
+PostgreSQL (after `pnpm db:migrate && pnpm db:seed`):
 
 ```
 pnpm scenario:duplicate-inventory
