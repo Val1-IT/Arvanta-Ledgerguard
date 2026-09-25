@@ -1,11 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { investigate } from '../engine/investigate';
-import type { IncidentInvestigationReport } from '../engine/types';
+import { investigate, type IncidentInvestigationReport, type InvestigationInput } from '@ledgerguard/core';
 import { loadInvestigationInput } from '../db/repositories/investigation';
 import { saveInvestigationRun } from '../db/repositories/investigation-runs';
+import { getRuntimePolicy } from '../runtime/runtime-policy';
 import { ActivityLogger } from './activity-log';
-import { DataHubBridgeError, readDataHubContext, writeInvestigationSummary } from './datahub-client';
+import {
+  createDataHubContextProvider,
+  createDataHubStatusPublisher,
+  type InvestigationContextProvider,
+  type InvestigationStatusPublisher
+} from './catalog';
 import type { InvestigationModel } from './model';
 import { reconcile } from './reconciliation';
 import {
@@ -48,6 +53,9 @@ export interface OrchestratorDeps {
   modelSource?: ModelSource;
   now?: () => Date;
   idGenerator?: () => string;
+  loadInvestigationInput?: () => Promise<InvestigationInput>;
+  contextProvider?: InvestigationContextProvider;
+  statusPublisher?: InvestigationStatusPublisher | null;
 }
 
 function buildEngineResultReference(engineResult: IncidentInvestigationReport): EngineResultReference {
@@ -123,10 +131,12 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
   const createdAt = now().toISOString();
   const logger = new ActivityLogger();
   const provenance: InvestigationProvenance = {
-    datahubSource: 'LIVE_MCP',
+    datahubSource: 'NOT_CONFIGURED',
     modelSource: deps.modelSource ?? deps.model.source ?? 'DETERMINISTIC_TEMPLATE',
     fallbackUsed: false
   };
+  const contextProvider = deps.contextProvider ?? createDataHubContextProvider();
+  const statusPublisher = deps.statusPublisher === undefined ? createDataHubStatusPublisher() : deps.statusPublisher;
   const stateHistory: InvestigationRunRecord['stateHistory'] = [];
 
   function transition(state: WorkflowState | FailureState): void {
@@ -162,7 +172,8 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
   let engineResult: IncidentInvestigationReport;
   try {
     transition('ENGINE_ANALYSIS_STARTED');
-    const engineInput = await logger.record('engine.loadInvestigationInput', () => loadInvestigationInput(deps.pool));
+    const loadInput = deps.loadInvestigationInput ?? (() => loadInvestigationInput(deps.pool));
+    const engineInput = await logger.record('engine.loadInvestigationInput', () => loadInput());
     engineResult = await logger.record(
       'engine.investigate',
       () => investigate(engineInput),
@@ -174,28 +185,20 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
   }
 
   // -------------------------------------------------------------------
-  // DataHub MCP — the sole source of schema/owner/tag/glossary/lineage.
-  // readDataHubContext performs search -> schema read -> owner/tag/term
-  // extraction -> lineage traversal to gross_margin_report as one bridge
-  // call; on success all four intermediate states are known to have
-  // succeeded, so they are recorded immediately after.
+  // Optional catalog context (DataHub). Never authorizes mutations.
+  // If DataHub is missing or unreachable, investigation continues with
+  // an empty context and explicit provenance — no fabricated metadata.
   // -------------------------------------------------------------------
-  let datahubContext: DataHubContext;
-  try {
-    transition('DATAHUB_ASSET_SEARCH');
-    const read = await readDataHubContext(input.triggerAsset);
-    logger.ingest(read.activityLog);
-    datahubContext = read.datahubContext;
+  transition('DATAHUB_ASSET_SEARCH');
+  const catalog = await contextProvider.readContext(input.triggerAsset);
+  logger.ingest(catalog.activityLog);
+  const datahubContext = catalog.context;
+  provenance.datahubSource = catalog.source;
+  if (catalog.source === 'LIVE_MCP') {
     transition('DATAHUB_SCHEMA_READ');
     transition('DATAHUB_OWNER_READ');
     transition('DATAHUB_GLOSSARY_READ');
     transition('DATAHUB_LINEAGE_TRAVERSED');
-  } catch (err) {
-    if (err instanceof DataHubBridgeError) {
-      logger.ingest(err.activityLog);
-      return fail(err.failureState, err.message);
-    }
-    return fail('MCP_UNAVAILABLE', err instanceof Error ? err.message : String(err));
   }
 
   // -------------------------------------------------------------------
@@ -252,31 +255,31 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
   transition('MODEL_ANALYSIS_VALIDATED');
 
   // -------------------------------------------------------------------
-  // Write-back — metadata only ("At Risk" tag + investigation note), never
-  // an incident close and never a tag removal. Failure here still yields a
-  // trustworthy, already-reconciled output; only the write-back itself
-  // did not complete.
+  // Optional DataHub write-back — metadata only. Never authorizes or
+  // rolls back system-of-record repair. Skipped when DataHub is absent.
   // -------------------------------------------------------------------
   const writtenAt = now().toISOString();
   const summaryText = buildWritebackSummary(investigationId, engineResult, engineResultReference, modelOutput, writtenAt);
-  try {
-    const writeback = await writeInvestigationSummary(input.triggerAsset, summaryText);
-    logger.ingest(writeback.activityLog);
-  } catch (err) {
-    if (err instanceof DataHubBridgeError) {
-      logger.ingest(err.activityLog);
+  if (statusPublisher && provenance.datahubSource === 'LIVE_MCP') {
+    try {
+      const writeback = await statusPublisher.publishInvestigationNote(input.triggerAsset, summaryText);
+      if (getRuntimePolicy().judgeMode && writeback.writePath !== 'mcp') {
+        throw new Error('Live DataHub MCP write-back is required in judge mode; SDK fallback is not accepted.');
+      }
+      logger.ingest(writeback.activityLog);
+    } catch (err) {
+      const output = buildOutput(
+        investigationId,
+        input,
+        'NEEDS_REVIEW',
+        modelOutput,
+        engineResultReference,
+        datahubContext,
+        provenance,
+        logger.finalize()
+      );
+      return fail('WRITEBACK_FAILED', err instanceof Error ? err.message : String(err), { output });
     }
-    const output = buildOutput(
-      investigationId,
-      input,
-      'NEEDS_REVIEW',
-      modelOutput,
-      engineResultReference,
-      datahubContext,
-      provenance,
-      logger.finalize()
-    );
-    return fail('WRITEBACK_FAILED', err instanceof Error ? err.message : String(err), { output });
   }
 
   transition('INVESTIGATION_SUMMARY_WRITTEN');

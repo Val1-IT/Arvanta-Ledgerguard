@@ -1,5 +1,7 @@
 import type { Pool } from 'pg';
-import { resolveDataHubIncident } from '../agent/datahub-client';
+import { DataHubBridgeError, isDataHubConfigured } from '@ledgerguard/datahub';
+import { createDataHubStatusPublisher, type InvestigationStatusPublisher } from '../agent/catalog';
+import { getRuntimePolicy } from '../runtime/runtime-policy';
 import { applyRemediationPlanTransition, loadRemediationPlan } from '../db/repositories/remediation-plans';
 import { RemediationPlanNotFoundError, type RemediationPlanRecord, type RemediationWritebackResult } from './types';
 
@@ -45,6 +47,7 @@ export interface WritebackRemediationResolutionInput {
 export interface WritebackRemediationResolutionDeps {
   pool: Pool;
   now?: () => Date;
+  publisher?: InvestigationStatusPublisher | null;
 }
 
 /**
@@ -72,25 +75,43 @@ export async function writebackRemediationResolution(
 
   const attemptedAt = now().toISOString();
   const summaryText = buildResolutionSummary(plan, attemptedAt);
+  const publisher = deps.publisher === undefined ? createDataHubStatusPublisher() : deps.publisher;
 
   let writebackResult: RemediationWritebackResult;
-  try {
-    const resolution = await resolveDataHubIncident(plan.triggerAsset, true, summaryText);
+  if (!publisher || !isDataHubConfigured()) {
     writebackResult = {
       attemptedAt,
-      outcome: 'SYNCED',
-      atRiskTagRemoved: resolution.atRiskTagRemoved,
-      trustedTagAdded: resolution.trustedTagAdded,
-      message: null
-    };
-  } catch (error) {
-    writebackResult = {
-      attemptedAt,
-      outcome: 'FAILED',
+      outcome: 'NOT_CONFIGURED',
       atRiskTagRemoved: false,
       trustedTagAdded: false,
-      message: error instanceof Error ? error.message : String(error)
+      message: 'DataHub is not configured; system-of-record verification is unchanged.'
     };
+  } else {
+    try {
+      const resolution = await publisher.publishResolution(plan.triggerAsset, true, summaryText);
+      if (getRuntimePolicy().judgeMode && resolution.writePath !== 'mcp') {
+        throw new DataHubBridgeError(
+          'WRITEBACK_FAILED',
+          'Live DataHub MCP resolution write-back is required in judge mode; SDK fallback is not accepted.',
+          resolution.activityLog
+        );
+      }
+      writebackResult = {
+        attemptedAt,
+        outcome: 'SYNCED',
+        atRiskTagRemoved: resolution.atRiskTagRemoved,
+        trustedTagAdded: resolution.trustedTagAdded,
+        message: null
+      };
+    } catch (error) {
+      writebackResult = {
+        attemptedAt,
+        outcome: 'FAILED',
+        atRiskTagRemoved: false,
+        trustedTagAdded: false,
+        message: error instanceof Error ? error.message : String(error)
+      };
+    }
   }
 
   return applyRemediationPlanTransition(pool, input.planId, plan.version, {

@@ -1,4 +1,4 @@
-import type { IncidentInvestigationReport, RecordRef } from '../engine/types';
+import type { IncidentInvestigationReport, RecordRef } from '@ledgerguard/core';
 import type {
   DataHubContext,
   ModelInvestigationOutput,

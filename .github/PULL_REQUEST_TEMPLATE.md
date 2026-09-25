@@ -1,9 +1,11 @@
 ## Summary
 
-## Test plan
+## Tests
+- [ ] `pnpm verify` (or equivalent unit/typecheck/lint)
+- [ ] Integration tests if this touches Postgres execution
 
-- [ ] `npm run typecheck`
-- [ ] `npm run lint`
-- [ ] `npm run test`
-- [ ] `npm run build`
-- [ ] Ran locally against the demo flow, if the change touches UI/agent/engine behavior
+## Invariants
+- [ ] LLM/model output is not treated as authority
+- [ ] No new arbitrary write SQL
+- [ ] Verify-before-commit still holds
+- [ ] Core/policy isolation not broken

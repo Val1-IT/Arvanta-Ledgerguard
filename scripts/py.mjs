@@ -21,18 +21,21 @@ const interpreter =
   candidates.find((candidate) => existsSync(candidate)) ??
   (process.platform === 'win32' ? 'python' : 'python3');
 
+const pythonRoot = path.join(repoRoot, 'packages', 'datahub', 'python');
+const pythonPath = [pythonRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+
 const child = spawn(interpreter, process.argv.slice(2), {
   cwd: repoRoot,
   stdio: 'inherit',
-  env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
+  env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONPATH: pythonPath },
 });
 
 child.on('error', (err) => {
   console.error(
     `Could not run Python (${interpreter}). Create the virtualenv first:\n` +
       '  python -m venv .venv\n' +
-      '  ./.venv/Scripts/pip install -r src/datahub/requirements.txt   # Windows\n' +
-      '  ./.venv/bin/pip install -r src/datahub/requirements.txt       # macOS / Linux\n\n' +
+      '  ./.venv/Scripts/pip install -r packages/datahub/python/src/datahub/requirements.txt   # Windows\n' +
+      '  ./.venv/bin/pip install -r packages/datahub/python/src/datahub/requirements.txt       # macOS / Linux\n\n' +
       String(err)
   );
   process.exit(1);

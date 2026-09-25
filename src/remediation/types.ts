@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProposedCorrectionSchema, VerificationExpectationSchema, VerificationResultSchema } from '../engine/types';
+import { ProposedCorrectionSchema, VerificationExpectationSchema, VerificationResultSchema } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 6 — approval + verified remediation workflow. Types only: no I/O, no
@@ -98,12 +98,16 @@ export type ExecutionStepResult = z.infer<typeof ExecutionStepResultSchema>;
 export const ExecutionFailureReasonSchema = z.enum(['DRIFT_DETECTED', 'SQL_ERROR']);
 export type ExecutionFailureReason = z.infer<typeof ExecutionFailureReasonSchema>;
 
+export const RemediationExecutionOutcomeSchema = z.enum(['EXECUTED', 'ALREADY_EXECUTED', 'FAILED']);
+export type RemediationExecutionOutcome = z.infer<typeof RemediationExecutionOutcomeSchema>;
+
 export const RemediationExecutionResultSchema = z.object({
   startedAt: z.string(),
   finishedAt: z.string(),
   steps: z.array(ExecutionStepResultSchema),
   failureReason: ExecutionFailureReasonSchema.nullable(),
-  failureDetail: z.string().nullable()
+  failureDetail: z.string().nullable(),
+  outcome: RemediationExecutionOutcomeSchema.optional()
 });
 export type RemediationExecutionResult = z.infer<typeof RemediationExecutionResultSchema>;
 
@@ -130,7 +134,7 @@ export type RemediationVerification = z.infer<typeof RemediationVerificationSche
 // succeeds.
 // ---------------------------------------------------------------------------
 
-export const DataHubWritebackOutcomeSchema = z.enum(['SYNCED', 'FAILED']);
+export const DataHubWritebackOutcomeSchema = z.enum(['SYNCED', 'FAILED', 'NOT_CONFIGURED']);
 export type DataHubWritebackOutcome = z.infer<typeof DataHubWritebackOutcomeSchema>;
 
 export const RemediationWritebackResultSchema = z.object({

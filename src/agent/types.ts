@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { IncidentTypeSchema, OverallHealthStatusSchema, RecordRefSchema } from '../engine/types';
+import { IncidentTypeSchema, OverallHealthStatusSchema, RecordRefSchema } from '@ledgerguard/core';
+import { DataHubContextSchema as CatalogContextSchema } from '@ledgerguard/datahub';
 
 // ---------------------------------------------------------------------------
 // FASE 5 — DataHub-aware investigation agent. Types only: no I/O, no engine
@@ -116,19 +117,13 @@ export type ActivityLogEntry = z.infer<typeof ActivityLogEntrySchema>;
 // this set before the investigation is allowed to complete.
 // ---------------------------------------------------------------------------
 
-export const DataHubContextSchema = z.object({
-  assetsRead: z.array(z.string()),
-  owners: z.array(z.string()),
-  glossaryTerms: z.array(z.string()),
-  tags: z.array(z.string()),
-  lineagePath: z.array(z.string())
-});
+export const DataHubContextSchema = CatalogContextSchema;
 export type DataHubContext = z.infer<typeof DataHubContextSchema>;
 
 // Persisted provenance is assigned by runtime code, never by the model. It is
 // intentionally separate from DataHubContext so a static development fallback
 // cannot be rendered as a successful live MCP read.
-export const DataHubSourceSchema = z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT']);
+export const DataHubSourceSchema = z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT', 'UNAVAILABLE', 'NOT_CONFIGURED']);
 export type DataHubSource = z.infer<typeof DataHubSourceSchema>;
 
 export const ModelSourceSchema = z.enum(['ANTHROPIC', 'OPENAI', 'DETERMINISTIC_TEMPLATE']);

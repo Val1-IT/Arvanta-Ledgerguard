@@ -1,18 +1,15 @@
 ---
 name: Bug report
-about: Report a problem with LedgerGuard
+about: Report incorrect safety or investigation behavior
 labels: bug
 ---
 
-**Describe the bug**
+**What happened**
 
-**Steps to reproduce**
+**Expected**
 
-**Expected behavior**
+**How to reproduce**
+Commands, scenario (`conversion-error` / `duplicate-inventory`), and whether PostgreSQL or in-memory.
 
-**Environment**
-- OS:
-- Node version:
-- Was DataHub running? (yes/no)
-
-**Logs / screenshots**
+**Safety impact**
+Did this weaken policy, approval, idempotency, or verify-before-commit?

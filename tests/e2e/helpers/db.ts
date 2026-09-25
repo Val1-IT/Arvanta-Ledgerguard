@@ -16,6 +16,7 @@ import {
   decideRemediationPlan,
   submitRemediationPlanForApproval
 } from '../../../src/remediation/approve';
+import { testHarnessAuthority } from '../../../src/remediation/trusted-authority';
 import { PRODUCT } from '../../../src/domain/constants';
 import { listRemediationPlansForInvestigation } from '../../../src/ui/server/queries';
 
@@ -91,19 +92,23 @@ export async function loadLatestPlan(pool: Pool, investigationId: string) {
 }
 
 export async function approvePlanFromServer(pool: Pool, planId: string, expectedVersion: number) {
-  return decideRemediationPlan(pool, {
-    planId,
-    expectedVersion,
-    action: 'APPROVE',
-    decidedBy: 'e2e-harness',
-    note: 'server-side approve for concurrency fixture'
-  });
+  return decideRemediationPlan(
+    pool,
+    {
+      planId,
+      expectedVersion,
+      action: 'APPROVE',
+      decidedBy: 'e2e-harness',
+      note: 'server-side approve for concurrency fixture'
+    },
+    { authority: testHarnessAuthority('e2e-harness') }
+  );
 }
 
 export async function createPendingPlan(pool: Pool, investigationId: string) {
   const draft = await createRemediationPlan(
     { investigationId, requestedBy: 'e2e-harness' },
-    { pool }
+    { pool, authority: testHarnessAuthority('e2e-harness') }
   );
   return submitRemediationPlanForApproval(pool, {
     planId: draft.id,
@@ -113,13 +118,17 @@ export async function createPendingPlan(pool: Pool, investigationId: string) {
 
 export async function seedVerificationFailedPlan(pool: Pool, investigationId: string) {
   const pending = await createPendingPlan(pool, investigationId);
-  const approved = await decideRemediationPlan(pool, {
-    planId: pending.id,
-    expectedVersion: pending.version,
-    action: 'APPROVE',
-    decidedBy: 'e2e-harness',
-    note: null
-  });
+  const approved = await decideRemediationPlan(
+    pool,
+    {
+      planId: pending.id,
+      expectedVersion: pending.version,
+      action: 'APPROVE',
+      decidedBy: 'e2e-harness',
+      note: null
+    },
+    { authority: testHarnessAuthority('e2e-harness') }
+  );
   const now = new Date().toISOString();
   return applyRemediationPlanTransition(pool, approved.id, approved.version, {
     state: 'VERIFICATION_FAILED',

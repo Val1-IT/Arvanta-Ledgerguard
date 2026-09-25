@@ -1,5 +1,12 @@
 import type { Pool } from 'pg';
 import {
+  assertTrustedApprover,
+  Capability,
+  hasCapability,
+  PolicyDeniedError,
+  type AuthorityContext
+} from '@ledgerguard/policy';
+import {
   createRemediationPlan as persistRemediationPlan,
   applyRemediationPlanTransition,
   loadRemediationPlan
@@ -24,8 +31,11 @@ import {
 
 export async function createRemediationPlan(
   input: GenerateRemediationPlanInput,
-  deps: GenerateRemediationPlanDeps
+  deps: GenerateRemediationPlanDeps & { authority: AuthorityContext }
 ): Promise<RemediationPlanRecord> {
+  if (!hasCapability(deps.authority, Capability.remediationPropose)) {
+    throw new PolicyDeniedError('Actor lacks remediation.propose', deps.authority);
+  }
   const plan = await generateRemediationPlan(input, deps);
   await persistRemediationPlan(deps.pool, plan);
   return plan;
@@ -72,8 +82,10 @@ export interface DecideRemediationPlanInput {
 export async function decideRemediationPlan(
   pool: Pool,
   input: DecideRemediationPlanInput,
-  now: () => Date = () => new Date()
+  options: { authority: AuthorityContext; now?: () => Date }
 ): Promise<RemediationPlanRecord> {
+  assertTrustedApprover(options.authority);
+  const now = options.now ?? (() => new Date());
   ApprovalActionSchema.parse(input.action);
 
   const plan = await loadRemediationPlan(pool, input.planId);

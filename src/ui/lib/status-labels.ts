@@ -85,7 +85,8 @@ const CORRECTION_ACTION_LABELS: Record<string, string> = {
   RECOMPUTE_INVENTORY_MOVEMENT: 'Recompute inventory movement',
   REGENERATE_INVENTORY_VALUATION: 'Regenerate inventory valuation',
   REGENERATE_GROSS_MARGIN_REPORT: 'Regenerate gross margin report',
-  RECONCILE_JOURNAL_ENTRIES: 'Reconcile journal entries'
+  RECONCILE_JOURNAL_ENTRIES: 'Reconcile journal entries',
+  REVERSE_INVENTORY_MOVEMENT: 'Reverse inventory movement'
 };
 
 const EXPOSURE_METHOD_LABELS: Record<string, string> = {

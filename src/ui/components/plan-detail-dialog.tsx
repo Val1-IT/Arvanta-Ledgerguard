@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef } from 'react';
-import type { ProposedCorrection } from '../../engine/types';
+import type { ProposedCorrection } from '@ledgerguard/core';
 import { formatDecimalDisplay, formatIsoDateTime } from '../lib/format-display';
 import {
   labelApprovalAction,

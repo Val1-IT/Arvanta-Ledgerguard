@@ -5,7 +5,7 @@ import {
   RecordImpactSchema,
   RecordRefSchema,
   VerificationResultSchema
-} from '../../engine/types';
+} from '@ledgerguard/core';
 import { ApprovalActionSchema, RemediationPlanStateSchema } from '../../remediation/types';
 
 export const UiLabeledUrnSchema = z.object({
@@ -84,7 +84,7 @@ export const IncidentDetailViewModelSchema = z.object({
     }),
     provenance: z
       .object({
-        datahubSource: z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT']),
+        datahubSource: z.enum(['LIVE_MCP', 'STATIC_DEMO_CONTEXT', 'UNAVAILABLE', 'NOT_CONFIGURED']),
         modelSource: z.enum(['ANTHROPIC', 'OPENAI', 'DETERMINISTIC_TEMPLATE']),
         fallbackUsed: z.boolean()
       })

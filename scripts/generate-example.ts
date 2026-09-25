@@ -5,7 +5,7 @@ import { makePool } from '../src/db/client';
 import { seedDatabase } from '../src/db/seed';
 import { applyConversionError } from '../demo-data/scenarios/conversion-error';
 import { loadInvestigationInput } from '../src/db/repositories/investigation';
-import { investigate } from '../src/engine/investigate';
+import { investigate } from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // Generates the FASE 4 example artifacts by actually running the engine

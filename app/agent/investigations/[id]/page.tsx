@@ -182,7 +182,14 @@ export default async function InvestigationRunPage({ params }: { params: Promise
             <h3 className="text-sm font-semibold">DataHub context</h3>
             {record.output.provenance ? (
               <p className="mb-2 text-xs text-ink-muted">
-                DataHub context: {record.output.provenance.datahubSource === 'LIVE_MCP' ? 'Live MCP' : 'Demo context fallback'}
+                DataHub context:{' '}
+                {record.output.provenance.datahubSource === 'LIVE_MCP'
+                  ? 'Live MCP'
+                  : record.output.provenance.datahubSource === 'STATIC_DEMO_CONTEXT'
+                    ? 'Demo context fallback'
+                    : record.output.provenance.datahubSource === 'NOT_CONFIGURED'
+                      ? 'Not configured'
+                      : 'Unavailable'}
                 {' · '}Model narration: {labelModelSource(record.output.provenance.modelSource)}
                 {' · '}Fallback used: {record.output.provenance.fallbackUsed ? 'Yes' : 'No'}
               </p>

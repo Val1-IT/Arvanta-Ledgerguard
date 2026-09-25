@@ -1,4 +1,4 @@
-import type { IncidentInvestigationReport } from '../../engine/types';
+import type { IncidentInvestigationReport } from '@ledgerguard/core';
 import { SCHEMA_VERSION, type DataHubContext } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,8 @@ const ALLOWED_ACTIONS = [
   'RECOMPUTE_INVENTORY_MOVEMENT',
   'REGENERATE_INVENTORY_VALUATION',
   'REGENERATE_GROSS_MARGIN_REPORT',
-  'RECONCILE_JOURNAL_ENTRIES'
+  'RECONCILE_JOURNAL_ENTRIES',
+  'REVERSE_INVENTORY_MOVEMENT'
 ] as const;
 
 export const SYSTEM_PROMPT = `You are the analysis component of the LedgerGuard DataHub-aware investigation agent.
