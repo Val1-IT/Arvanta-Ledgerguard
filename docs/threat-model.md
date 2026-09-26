@@ -1,4 +1,4 @@
-# Threat model (v0.1)
+# Threat model (v0.2)
 
 LedgerGuard assumes a **trusted host process** and an **untrusted LLM**. The model may propose; it must not become authority.
 
@@ -32,9 +32,9 @@ LedgerGuard assumes a **trusted host process** and an **untrusted LLM**. The mod
 | --- | --- |
 | LLM / agent output | Untrusted |
 | Demo UI form fields | Untrusted (must not carry capabilities) |
-| `AuthorityContext` from application server code | Trusted in v0.1 (demo-hardcoded) |
+| `AuthorityContext` from application server code | Trusted in the demo (hardcoded `incident-ui`) |
 | `@ledgerguard/policy` | Trusted deterministic code |
 | `@ledgerguard/postgres` allowlist | Trusted mutation surface |
 | `@ledgerguard/datahub` | Untrusted for authority; optional context |
 
-v0.1 demo authority is **not** production IAM.
+Demo authority is **not** production IAM. v0.2 closes the PostgreSQL post-COMMIT reserved-key window for the default adapter; it does not claim exactly-once delivery.

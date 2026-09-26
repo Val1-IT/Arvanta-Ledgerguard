@@ -14,6 +14,7 @@ Reliability slice for execution integrity. Not a full adapter SDK and not exactl
 - Inventory and finance invariant primitives re-export the existing quality checks
 - v0.1 public investigation, policy, and allowlisted correction behavior is unchanged
 - PostgreSQL integration tests cover atomic commit, pre-commit rollback, verification failure, completed-key replay, and the 0005 journal migration
+- `@ledgerguard/policy` 0.2.0 adds recovery audit event types (`execution.recovery_*`, `execution.reconciled`)
 
 ## 0.1.1
 
