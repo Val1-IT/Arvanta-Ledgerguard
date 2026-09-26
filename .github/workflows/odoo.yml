@@ -1,0 +1,24 @@
+name: Odoo 19 integration (opt-in)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  odoo:
+    name: Odoo 19 JSON-2 contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Odoo package tests (fake JSON-2 transport)
+        run: pnpm --filter @ledgerguard/odoo test
+      - name: Note
+        run: echo "Live Odoo 19 Docker is opt-in locally via ODOO_BASE_URL/ODOO_API_KEY. Default CI stays fast."

@@ -65,7 +65,10 @@ describe('PostgresSystemOfRecordAdapter transactions', () => {
     const adapter = new PostgresSystemOfRecordAdapter({ connect: async () => ({}) } as unknown as Pool);
     expect(adapter.meta.capabilities).toEqual({
       nativeTransactions: true,
-      idempotencyInNativeTransaction: true
+      idempotencyInNativeTransaction: true,
+      supportsStateVersioning: false,
+      supportsSimulation: false,
+      supportsCompensation: false
     });
   });
 });

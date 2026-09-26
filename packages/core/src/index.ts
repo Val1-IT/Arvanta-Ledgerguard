@@ -66,7 +66,18 @@ export type {
   ConstrainedRemediationResult,
   ConstrainedRemediationFailureReason
 } from './ports/system-of-record';
-export { CorrectionStepStatus } from './ports/system-of-record';
+export { CorrectionStepStatus, DEFAULT_ADAPTER_CAPABILITIES } from './ports/system-of-record';
+export type {
+  ConstrainedAction,
+  ConstrainedActionTarget,
+  ConstrainedActionOutcome,
+  ConstrainedActionExecutionResult,
+  ConstrainedActionAdapter
+} from './ports/constrained-action';
+export {
+  executeConstrainedAction,
+  StaleActionError
+} from './lifecycle/execute-constrained-action';
 export {
   InventoryInvariants,
   FinanceInvariants,
