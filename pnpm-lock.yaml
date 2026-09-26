@@ -17,6 +17,9 @@ importers:
       '@ledgerguard/datahub':
         specifier: workspace:*
         version: link:packages/datahub
+      '@ledgerguard/odoo':
+        specifier: workspace:*
+        version: link:packages/odoo
       '@ledgerguard/policy':
         specifier: workspace:*
         version: link:packages/policy

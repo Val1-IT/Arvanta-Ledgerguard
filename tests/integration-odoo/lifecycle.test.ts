@@ -25,16 +25,19 @@ function planRecord(state: RemediationPlanRecord['state'], version: number): Rem
     proposedCorrections: [
       {
         sequence: 1,
-        action: 'UPDATE_INVENTORY_VALUATION',
+        action: 'REGENERATE_INVENTORY_VALUATION',
         table: 'inventory_valuation',
         recordId: 'val-item-001',
         field: 'quantity_on_hand',
         beforeValue: '20',
         afterValue: '10',
-        reason: 'odoo live fixture'
+        financialDelta: null,
+        rollbackAssumption: 'odoo live fixture'
       }
     ],
-    verificationExpectations: [{ checkId: 'INVENTORY_VALUATION_CONSISTENCY', expectedStatus: 'PASS' }],
+    verificationExpectations: [
+      { checkId: 'INVENTORY_VALUATION_CONSISTENCY', expectedStatus: 'PASS', description: 'on-hand 10' }
+    ],
     approvalAction: 'APPROVE',
     approvedBy: 'controller',
     approvalNote: null,

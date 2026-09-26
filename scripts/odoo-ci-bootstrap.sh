@@ -25,8 +25,9 @@ done
 
 key="$("${compose[@]}" exec -T odoo odoo shell --no-http \
   --db_host=odoo-db --db_user=odoo --db_password=odoo -d odoo <<'PY'
+from datetime import date, timedelta
 admin = env.ref('base.user_admin')
-print(env['res.users.apikeys'].with_user(admin)._generate(None, 'ledgerguard-ci'))
+print(env['res.users.apikeys'].with_user(admin)._generate(None, 'ledgerguard-ci', date.today() + timedelta(days=60)))
 env.cr.commit()
 PY
 )"

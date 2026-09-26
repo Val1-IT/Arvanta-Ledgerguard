@@ -5,6 +5,7 @@ import {
   buildExecutionReceipt,
   executeConstrainedAction,
   ExecutionStatus,
+  type AdapterCapabilities,
   type ConstrainedAction,
   type ConstrainedActionAdapter,
   type ExecutionReceipt
@@ -185,7 +186,7 @@ export async function executeRemoteConstrainedAction(
     adapter: {
       systemId: deps.adapter.meta.systemId,
       systemType: deps.adapter.meta.systemType,
-      ...adapterCapabilitiesOrDefault(deps.adapter.meta.capabilities)
+      ...adapterCapabilitiesOrDefault(deps.adapter.meta.capabilities as AdapterCapabilities | undefined)
     },
     verificationOverallStatus: result.verified ? 'PASS' : 'FAIL',
     committed: result.verified,
@@ -317,7 +318,7 @@ async function finishRemoteApplied(
     adapter: {
       systemId: input.adapter.meta.systemId,
       systemType: input.adapter.meta.systemType,
-      ...adapterCapabilitiesOrDefault(input.adapter.meta.capabilities)
+      ...adapterCapabilitiesOrDefault(input.adapter.meta.capabilities as AdapterCapabilities | undefined)
     },
     verificationOverallStatus: 'PASS',
     committed: true,
