@@ -11,6 +11,8 @@ LedgerGuard assumes a **trusted host process** and an **untrusted LLM**. The mod
 - Stale approval (plan version mismatch)
 - Replay of a **completed** idempotency key (`ALREADY_EXECUTED`, no second mutation)
 - Committing a repair that fails deterministic verification (rollback)
+- Treating an adapter/HTTP success as execution success without `verifyState`
+- Silently retrying an expired `reserved` key whose live state is ambiguous
 - Treating DataHub / catalog outage as permission to skip policy or verification
 
 ## Does not claim to protect against
@@ -21,7 +23,8 @@ LedgerGuard assumes a **trusted host process** and an **untrusted LLM**. The mod
 - Distributed transactions across unrelated systems
 - Bugs in a future custom adapter
 - Arbitrary code running inside the LedgerGuard process
-- The known crash window between `COMMIT` and idempotency `completed`
+- Adapters that cannot persist idempotency in the same native transaction as the mutation
+- Ambiguous expired reservations (`RECOVERY_REQUIRED`) until a human inspects the system of record
 
 ## Trust boundaries
 

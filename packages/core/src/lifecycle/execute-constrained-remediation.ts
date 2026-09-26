@@ -1,5 +1,6 @@
 import { investigate } from '../investigate';
 import { correctionsMatch } from './corrections-match';
+import { sourceStateFingerprint } from './source-state';
 import type {
   ConstrainedRemediationResult,
   CorrectionStepResult,
@@ -31,11 +32,16 @@ export interface ExecuteConstrainedRemediationInput {
   onWritesApplied?: () => Promise<void>;
 }
 
+function resultBase(approvedCorrections: ProposedCorrection[]): Pick<ConstrainedRemediationResult, 'sourceStateFingerprint'> {
+  return { sourceStateFingerprint: sourceStateFingerprint(approvedCorrections) };
+}
+
 export async function executeConstrainedRemediation(
   adapter: SystemOfRecordAdapter,
   input: ExecuteConstrainedRemediationInput
 ): Promise<ConstrainedRemediationResult> {
   const now = input.now ?? (() => new Date());
+  const fingerprint = resultBase(input.approvedCorrections);
   let steps: CorrectionStepResult[] = [];
 
   try {
@@ -71,7 +77,8 @@ export async function executeConstrainedRemediation(
       steps: success.steps,
       verification: success.verification,
       failureReason: null,
-      failureDetail: null
+      failureDetail: null,
+      ...fingerprint
     };
   } catch (error) {
     if (error instanceof DriftDetectedError) {
@@ -80,7 +87,8 @@ export async function executeConstrainedRemediation(
         steps: [],
         verification: null,
         failureReason: 'DRIFT_DETECTED',
-        failureDetail: error.message
+        failureDetail: error.message,
+        ...fingerprint
       };
     }
     if (error instanceof VerificationFailedError) {
@@ -89,7 +97,8 @@ export async function executeConstrainedRemediation(
         steps: error.steps,
         verification: error.verification,
         failureReason: 'VERIFICATION_FAILED',
-        failureDetail: error.message
+        failureDetail: error.message,
+        ...fingerprint
       };
     }
     return {
@@ -97,7 +106,8 @@ export async function executeConstrainedRemediation(
       steps,
       verification: null,
       failureReason: 'MUTATION_REJECTED',
-      failureDetail: error instanceof Error ? error.message : String(error)
+      failureDetail: error instanceof Error ? error.message : String(error),
+      ...fingerprint
     };
   }
 }

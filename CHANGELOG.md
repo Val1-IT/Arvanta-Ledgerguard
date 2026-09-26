@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+Reliability slice for execution integrity. Not a full adapter SDK and not exactly-once semantics.
+
+- Structured `ExecutionReceipt` with source-state fingerprint and lifecycle status
+- PostgreSQL completes the idempotency key and writes `ledgerguard_execution_journal` in the same transaction as verified mutations
+- Stale `reserved` keys gain a lease and deterministic recovery (`ALREADY_EXECUTED` / retryable / `RECOVERY_REQUIRED`)
+- Adapter capability flags: `nativeTransactions`, `idempotencyInNativeTransaction`
+- Inventory and finance invariant primitives re-export the existing quality checks
+- v0.1 public investigation, policy, and allowlisted correction behavior is unchanged
+
 ## 0.1.1
 
 External usability / tester onboarding. No execution-integrity architecture changes.

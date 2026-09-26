@@ -1,8 +1,14 @@
 import type { InvestigationInput, ProposedCorrection, VerificationResult } from '../types';
 
+export interface AdapterCapabilities {
+  nativeTransactions: boolean;
+  idempotencyInNativeTransaction: boolean;
+}
+
 export interface SystemOfRecordMeta {
   systemId: string;
   systemType: string;
+  capabilities?: AdapterCapabilities;
 }
 
 export const CorrectionStepStatus = {
@@ -48,4 +54,5 @@ export interface ConstrainedRemediationResult {
   verification: VerificationResult | null;
   failureReason: ConstrainedRemediationFailureReason | null;
   failureDetail: string | null;
+  sourceStateFingerprint: string;
 }

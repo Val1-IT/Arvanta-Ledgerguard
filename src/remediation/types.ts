@@ -98,7 +98,12 @@ export type ExecutionStepResult = z.infer<typeof ExecutionStepResultSchema>;
 export const ExecutionFailureReasonSchema = z.enum(['DRIFT_DETECTED', 'SQL_ERROR']);
 export type ExecutionFailureReason = z.infer<typeof ExecutionFailureReasonSchema>;
 
-export const RemediationExecutionOutcomeSchema = z.enum(['EXECUTED', 'ALREADY_EXECUTED', 'FAILED']);
+export const RemediationExecutionOutcomeSchema = z.enum([
+  'EXECUTED',
+  'ALREADY_EXECUTED',
+  'FAILED',
+  'RECOVERY_REQUIRED'
+]);
 export type RemediationExecutionOutcome = z.infer<typeof RemediationExecutionOutcomeSchema>;
 
 export const RemediationExecutionResultSchema = z.object({

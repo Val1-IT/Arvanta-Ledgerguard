@@ -11,6 +11,10 @@ export { fetchPurchaseReceipts } from './repositories/receipts';
 export {
   PostgresExecutionKeyStore,
   defaultExecutionKey,
+  DEFAULT_RESERVATION_LEASE_MS,
   type ExecutionKeyReservation,
-  type ExecutionKeyState
+  type ExecutionKeyState,
+  type ExecutionKeyRecord,
+  type StaleReservationRecovery,
+  type StaleReservationClassification
 } from './execution-keys';

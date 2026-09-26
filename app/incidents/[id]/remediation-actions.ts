@@ -153,6 +153,16 @@ export async function executeRemediationPlanAction(input: {
       };
     }
 
+    if (executed.outcome === 'RECOVERY_REQUIRED') {
+      revalidateIncident(input.investigationId);
+      return {
+        ok: false,
+        error:
+          'A previous execution left an ambiguous reserved key. LedgerGuard refused to mutate. Inspect the system of record and retry after recovery.',
+        code: 'RECOVERY_REQUIRED'
+      };
+    }
+
     // Best-effort DataHub sync immediately after a verified ERP restore so the
     // Resolution tab does not stay on "Not attempted" when GMS/MCP is healthy.
     if (plan.state === 'RESOLVED' && !plan.datahubWriteback) {

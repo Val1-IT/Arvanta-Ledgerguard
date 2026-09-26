@@ -1,6 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import {
+  adapterCapabilitiesOrDefault,
+  buildExecutionReceipt,
+  classifyStaleReservation,
   executeConstrainedRemediation,
+  ExecutionStatus,
+  sourceStateFingerprint,
+  type ExecutionReceipt,
   type SystemOfRecordAdapter
 } from '@ledgerguard/core';
 import {
@@ -58,6 +65,7 @@ function impactFromPlan(plan: RemediationPlanRecord): number {
 export interface ExecuteRemediationPlanResult {
   plan: RemediationPlanRecord;
   outcome: RemediationExecutionOutcome;
+  receipt?: ExecutionReceipt;
 }
 
 export async function executeRemediationPlan(
@@ -67,7 +75,7 @@ export async function executeRemediationPlan(
   const { pool } = deps;
   const now = deps.now ?? (() => new Date());
   const authority = assertTrustedExecutor(deps.authority);
-  const adapter = deps.adapter ?? new PostgresSystemOfRecordAdapter(pool);
+  const readAdapter = deps.adapter ?? new PostgresSystemOfRecordAdapter(pool);
   const audit = deps.audit ?? createMemoryAuditLog();
   const keys = deps.executionKeys ?? new PostgresExecutionKeyStore(pool);
   const policyConfig = deps.policyConfig ?? DEFAULT_POLICY_CONFIG;
@@ -131,7 +139,7 @@ export async function executeRemediationPlan(
     throw new InvalidTransitionError(input.planId, plan.state, 'EXECUTING');
   }
 
-  const reservation = await keys.reserve({
+  let reservation = await keys.reserve({
     key: idempotencyKey,
     planId: plan.id,
     planVersion: input.expectedVersion,
@@ -148,7 +156,33 @@ export async function executeRemediationPlan(
     return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
   }
   if (reservation === 'in_flight') {
-    throw new ConcurrentExecutionError();
+    const recovered = await recoverStaleReservation({
+      keys,
+      adapter: readAdapter,
+      plan,
+      idempotencyKey,
+      now: now()
+    });
+    if (recovered === 'completed') {
+      return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
+    }
+    if (recovered === 'recovery_required') {
+      return { plan, outcome: 'RECOVERY_REQUIRED' };
+    }
+    if (recovered === 'failed_retryable') {
+      reservation = await keys.reserve({
+        key: idempotencyKey,
+        planId: plan.id,
+        planVersion: input.expectedVersion,
+        now: now()
+      });
+    }
+    if (reservation === 'in_flight') {
+      throw new ConcurrentExecutionError();
+    }
+    if (reservation === 'already_completed') {
+      return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
+    }
   }
 
   audit.append({
@@ -173,7 +207,53 @@ export async function executeRemediationPlan(
   });
 
   const startedAt = now().toISOString();
-  const result = await executeConstrainedRemediation(adapter, {
+  const executionId = randomUUID();
+  const fingerprint = sourceStateFingerprint(plan.proposedCorrections);
+  const capabilities = adapterCapabilitiesOrDefault(readAdapter.meta.capabilities);
+  let completedInTransaction = false;
+  let inTransactionReceipt: ExecutionReceipt | undefined;
+
+  const mutationAdapter =
+    deps.adapter ??
+    new PostgresSystemOfRecordAdapter(pool, {
+      beforeCommit: async (client, verified) => {
+        const verification = (verified as { verification?: { overallStatus?: 'PASS' | 'FAIL' } }).verification;
+        const receipt = buildExecutionReceipt({
+          executionId,
+          planId: plan.id,
+          planVersion: input.expectedVersion,
+          idempotencyKey,
+          status: ExecutionStatus.committed,
+          sourceStateFingerprint: fingerprint,
+          adapter: {
+            systemId: readAdapter.meta.systemId,
+            systemType: readAdapter.meta.systemType,
+            ...capabilities,
+            nativeTransactions: true,
+            idempotencyInNativeTransaction: true
+          },
+          verificationOverallStatus: verification?.overallStatus ?? 'PASS',
+          committed: true,
+          occurredAt: now().toISOString()
+        });
+        const txKeys = new PostgresExecutionKeyStore(client);
+        await txKeys.complete(idempotencyKey, now(), receipt);
+        await txKeys.appendJournal({
+          id: `journal:${executionId}`,
+          key: idempotencyKey,
+          planId: plan.id,
+          planVersion: input.expectedVersion,
+          status: receipt.status,
+          sourceStateFingerprint: fingerprint,
+          receipt,
+          now: now()
+        });
+        completedInTransaction = true;
+        inTransactionReceipt = receipt;
+      }
+    });
+
+  const result = await executeConstrainedRemediation(mutationAdapter, {
     approvedCorrections: plan.proposedCorrections,
     now,
     onWritesApplied: async () => {
@@ -201,31 +281,73 @@ export async function executeRemediationPlan(
   };
 
   if (result.committed && result.verification) {
-    await keys.complete(idempotencyKey, now(), { status: 'EXECUTED', planId: plan.id });
+    const receipt =
+      inTransactionReceipt ??
+      buildExecutionReceipt({
+        executionId,
+        planId: plan.id,
+        planVersion: input.expectedVersion,
+        idempotencyKey,
+        status: ExecutionStatus.committed,
+        sourceStateFingerprint: result.sourceStateFingerprint,
+        adapter: {
+          systemId: mutationAdapter.meta.systemId,
+          systemType: mutationAdapter.meta.systemType,
+          ...adapterCapabilitiesOrDefault(mutationAdapter.meta.capabilities)
+        },
+        verificationOverallStatus: result.verification.overallStatus,
+        committed: true,
+        occurredAt: finishedAt
+      });
+    if (!completedInTransaction) {
+      await keys.complete(idempotencyKey, now(), receipt);
+    }
     audit.append({
       occurredAt: finishedAt,
       type: 'execution.committed',
       actorId: authority.actorId,
       planId: plan.id,
-      payload: { verification: result.verification.overallStatus }
+      payload: { verification: result.verification.overallStatus, receipt }
     });
     const resolved = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
       state: 'RESOLVED',
       updatedAt: finishedAt,
-      executionResultJson: JSON.stringify({ ...executionResult, outcome: 'EXECUTED' }),
+      executionResultJson: JSON.stringify({ ...executionResult, outcome: 'EXECUTED', receipt }),
       executedAt: finishedAt,
       verificationJson: JSON.stringify({ verifiedAt: finishedAt, result: result.verification })
     });
-    return { plan: resolved, outcome: 'EXECUTED' };
+    return { plan: resolved, outcome: 'EXECUTED', receipt };
   }
 
-  await keys.failRetryable(idempotencyKey, now(), { status: 'FAILED_RETRYABLE', failureReason });
+  const failedReceipt = buildExecutionReceipt({
+    executionId,
+    planId: plan.id,
+    planVersion: input.expectedVersion,
+    idempotencyKey,
+    status:
+      result.failureReason === 'DRIFT_DETECTED'
+        ? ExecutionStatus.stale
+        : result.failureReason === 'VERIFICATION_FAILED'
+          ? ExecutionStatus.verificationFailed
+          : ExecutionStatus.rolledBack,
+    sourceStateFingerprint: result.sourceStateFingerprint,
+    adapter: {
+      systemId: mutationAdapter.meta.systemId,
+      systemType: mutationAdapter.meta.systemType,
+      ...adapterCapabilitiesOrDefault(mutationAdapter.meta.capabilities)
+    },
+    verificationOverallStatus: result.verification?.overallStatus ?? null,
+    committed: false,
+    occurredAt: finishedAt
+  });
+
+  await keys.failRetryable(idempotencyKey, now(), failedReceipt);
   audit.append({
     occurredAt: finishedAt,
     type: 'execution.rolled_back',
     actorId: authority.actorId,
     planId: plan.id,
-    payload: { failureReason: result.failureReason }
+    payload: { failureReason: result.failureReason, receipt: failedReceipt }
   });
 
   const terminalState =
@@ -236,11 +358,42 @@ export async function executeRemediationPlan(
   const failed = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
     state: terminalState,
     updatedAt: finishedAt,
-    executionResultJson: JSON.stringify(executionResult),
+    executionResultJson: JSON.stringify({ ...executionResult, receipt: failedReceipt }),
     executedAt: finishedAt,
     ...(result.verification
       ? { verificationJson: JSON.stringify({ verifiedAt: finishedAt, result: result.verification }) }
       : {})
   });
-  return { plan: failed, outcome: 'FAILED' };
+  return { plan: failed, outcome: 'FAILED', receipt: failedReceipt };
+}
+
+async function recoverStaleReservation(input: {
+  keys: PostgresExecutionKeyStore;
+  adapter: SystemOfRecordAdapter;
+  plan: RemediationPlanRecord;
+  idempotencyKey: string;
+  now: Date;
+}): Promise<'completed' | 'failed_retryable' | 'recovery_required' | 'in_flight'> {
+  const existing = await input.keys.get(input.idempotencyKey);
+  if (!existing || !input.keys.isLeaseExpired(existing, input.now)) {
+    return 'in_flight';
+  }
+
+  let snapshot;
+  try {
+    snapshot = await input.adapter.runInTransaction((session) => session.loadInvestigationInput());
+  } catch {
+    return 'recovery_required';
+  }
+
+  const classification = classifyStaleReservation({
+    snapshot,
+    approvedCorrections: input.plan.proposedCorrections
+  });
+  return input.keys.recoverExpiredReservation({
+    key: input.idempotencyKey,
+    classification,
+    now: input.now,
+    receipt: { status: 'STALE_RESERVED_RECOVERY', classification }
+  });
 }

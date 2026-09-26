@@ -199,7 +199,19 @@ export const ledgerguardExecutionKeys = pgTable('ledgerguard_execution_keys', {
   state: text('state').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-  resultJson: text('result_json')
+  resultJson: text('result_json'),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true })
+});
+
+export const ledgerguardExecutionJournal = pgTable('ledgerguard_execution_journal', {
+  id: text('id').primaryKey(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  planId: text('plan_id').notNull(),
+  planVersion: integer('plan_version').notNull(),
+  status: text('status').notNull(),
+  sourceStateFingerprint: text('source_state_fingerprint').notNull(),
+  receiptJson: text('receipt_json').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull()
 });
 
 export type ProductRow = typeof products.$inferSelect;

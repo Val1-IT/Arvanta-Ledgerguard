@@ -36,6 +36,19 @@ export { duplicateInventoryMovementDetector, findDuplicateMovementGroups } from 
 export type { IncidentDetector, DetectorHit } from './detectors/types';
 export { DETECTORS } from './detectors/registry';
 export { correctionsMatch, correctionKey } from './lifecycle/corrections-match';
+export { sourceStateFingerprint } from './lifecycle/source-state';
+export { ExecutionStatus, type ExecutionStatusName } from './lifecycle/execution-status';
+export {
+  EXECUTION_RECEIPT_SCHEMA_VERSION,
+  adapterCapabilitiesOrDefault,
+  buildExecutionReceipt,
+  type ExecutionReceipt,
+  type ExecutionReceiptAdapter
+} from './lifecycle/execution-receipt';
+export {
+  classifyStaleReservation,
+  type StaleReservationClassification
+} from './lifecycle/classify-stale-reservation';
 export {
   executeConstrainedRemediation,
   DriftDetectedError,
@@ -46,8 +59,14 @@ export type {
   SystemOfRecordAdapter,
   SystemOfRecordSession,
   SystemOfRecordMeta,
+  AdapterCapabilities,
   CorrectionStepResult,
   ConstrainedRemediationResult,
   ConstrainedRemediationFailureReason
 } from './ports/system-of-record';
 export { CorrectionStepStatus } from './ports/system-of-record';
+export {
+  InventoryInvariants,
+  FinanceInvariants,
+  DETERMINISTIC_INVARIANTS
+} from './invariants';
