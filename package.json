@@ -13,6 +13,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "demo": "pnpm install --frozen-lockfile --prod=false && pnpm run scenario:duplicate-inventory:memory",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

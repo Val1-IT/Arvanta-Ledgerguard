@@ -43,19 +43,65 @@ LedgerGuard separates **probabilistic reasoning** from **deterministic execution
 Optional: @ledgerguard/datahub  (catalog context only — not authority)
 ```
 
-Status: **v0.1.0 pre-release**. Demonstrates the safety model on synthetic PostgreSQL data. Not a production authentication or ERP platform.
+Status: **v0.1.0 pre-release**. Demonstrates the safety model on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
 
 License: [Apache-2.0](LICENSE)
 
-## Quickstart (PostgreSQL only — DataHub not required)
+## Quickstart: one-command local demo
 
-Requires Node.js 20+, pnpm 9, and Docker.
+Requires **Node.js 20+** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
 cd Arvanta-Ledgerguard
-cp .env.example .env
-pnpm install
+pnpm demo
+```
+
+`pnpm demo` installs the locked dependencies (including development tools), then runs the duplicate-inventory scenario with the real core and policy packages against a fresh in-memory fixture. The first install needs access to the npm registry. No Docker, `.env`, database, DataHub, or model API key is needed. Existing environment files and databases are not read or changed by the scenario. Reruns start from fresh synthetic data.
+
+The demo shows evidence, a proposed repair, `REQUIRE_APPROVAL`, a **simulated human approval**, and verified execution. It exits nonzero if any expected result fails. Successful output ends with:
+
+```text
+DEMO PASS: duplicate detected; approval required; repair verified.
+Quantity: 20.000 -> 10.000 | Valuation: 1700000.00 -> 850000.00
+Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
+```
+
+This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use the PostgreSQL path below to exercise those.
+
+**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.md) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
+
+### Manual fallback: same in-memory demo
+
+Use separate steps to diagnose an install failure or rerun without installing:
+
+```bash
+pnpm install --frozen-lockfile --prod=false
+pnpm scenario:duplicate-inventory:memory
+```
+
+If installation fails, check registry/network access and the Node/pnpm versions, then retry. No database reset is needed.
+
+### PostgreSQL demo (optional, DataHub not required)
+
+Also requires Docker running with Compose available. Use only the disposable demo database: seeding replaces its synthetic data. No `.env` copy is needed. In a new terminal, explicitly select the local Compose database before running the remaining commands; this takes precedence over a `DATABASE_URL` in `.env`.
+
+macOS/Linux:
+
+```bash
+export DATABASE_URL=postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DATABASE_URL = 'postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard'
+```
+
+Then, in that same terminal, from the repository directory:
+
+```bash
+pnpm install --frozen-lockfile --prod=false
 pnpm db:up
 pnpm db:wait
 pnpm db:migrate
