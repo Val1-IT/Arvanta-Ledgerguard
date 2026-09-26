@@ -12,7 +12,8 @@ import {
 import {
   defaultExecutionKey,
   PostgresExecutionKeyStore,
-  PostgresSystemOfRecordAdapter
+  PostgresSystemOfRecordAdapter,
+  type Queryable
 } from '@ledgerguard/postgres';
 import {
   ApprovalRequiredError,
@@ -52,6 +53,7 @@ export interface ExecuteRemediationPlanDeps {
   policyConfig?: PolicyConfig;
   audit?: SafetyAuditLog;
   executionKeys?: PostgresExecutionKeyStore;
+  afterIntegrityBookkeeping?: (client: Queryable) => Promise<void>;
 }
 
 export type { ExecuteRemediationPlanResult };
@@ -267,6 +269,9 @@ export async function executeRemediationPlan(
         });
         completedInTransaction = true;
         inTransactionReceipt = receipt;
+        if (deps.afterIntegrityBookkeeping) {
+          await deps.afterIntegrityBookkeeping(client);
+        }
       }
     });
 
