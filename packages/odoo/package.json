@@ -1,12 +1,12 @@
 {
-  "name": "@ledgerguard/postgres",
+  "name": "@ledgerguard/odoo",
   "version": "0.3.0",
-  "description": "Constrained PostgreSQL system-of-record adapter and transactional execution.",
+  "description": "Odoo 19 JSON-2 adapter: one constrained stock.quant inventory adjustment.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/Val1-IT/Arvanta-Ledgerguard.git",
-    "directory": "packages/postgres"
+    "directory": "packages/odoo"
   },
   "type": "module",
   "main": "./src/index.ts",
@@ -25,11 +25,9 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ledgerguard/core": "workspace:*",
-    "pg": "^8.13.1"
+    "@ledgerguard/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.10",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },

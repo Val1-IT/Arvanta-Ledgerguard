@@ -1,5 +1,5 @@
 import type { VerificationResult } from '../types';
-import type { AdapterCapabilities } from '../ports/system-of-record';
+import { DEFAULT_ADAPTER_CAPABILITIES, type AdapterCapabilities } from '../ports/system-of-record';
 import type { StaleReservationClassification } from './classify-stale-reservation';
 import type { ExecutionStatusName } from './execution-status';
 
@@ -32,8 +32,9 @@ export function adapterCapabilitiesOrDefault(
   capabilities: AdapterCapabilities | undefined
 ): Pick<ExecutionReceiptAdapter, 'nativeTransactions' | 'idempotencyInNativeTransaction'> {
   return {
-    nativeTransactions: capabilities?.nativeTransactions ?? false,
-    idempotencyInNativeTransaction: capabilities?.idempotencyInNativeTransaction ?? false
+    nativeTransactions: capabilities?.nativeTransactions ?? DEFAULT_ADAPTER_CAPABILITIES.nativeTransactions,
+    idempotencyInNativeTransaction:
+      capabilities?.idempotencyInNativeTransaction ?? DEFAULT_ADAPTER_CAPABILITIES.idempotencyInNativeTransaction
   };
 }
 

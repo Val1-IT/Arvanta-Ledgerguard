@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+Experimental Adapter SDK slice + Odoo 19 inventory adjustment. Not a general ERP connector.
+
+- Additive `ConstrainedAction` / `ConstrainedActionAdapter` and `executeConstrainedAction`
+- Adapter capabilities: `supportsStateVersioning`, `supportsSimulation`, `supportsCompensation`
+- `@ledgerguard/odoo`: JSON-2 client allowlisted to `stock.quant` `search_read` / `write` / `action_apply_inventory`
+- HTTP 200 is not verified success; independent re-read required
+- State-bound `write_date` fingerprint; recovery classification for remote SoR
+- Default CI unchanged; Odoo live tests are opt-in
+
 ## 0.2.0
 
 Reliability slice for execution integrity. Not a full adapter SDK and not exactly-once semantics.

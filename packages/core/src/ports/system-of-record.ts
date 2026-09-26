@@ -3,11 +3,23 @@ import type { InvestigationInput, ProposedCorrection, VerificationResult } from 
 export interface AdapterCapabilities {
   nativeTransactions: boolean;
   idempotencyInNativeTransaction: boolean;
+  supportsStateVersioning: boolean;
+  supportsSimulation: boolean;
+  supportsCompensation: boolean;
 }
+
+export const DEFAULT_ADAPTER_CAPABILITIES: AdapterCapabilities = {
+  nativeTransactions: false,
+  idempotencyInNativeTransaction: false,
+  supportsStateVersioning: false,
+  supportsSimulation: false,
+  supportsCompensation: false
+};
 
 export interface SystemOfRecordMeta {
   systemId: string;
   systemType: string;
+  adapterVersion?: string;
   capabilities?: AdapterCapabilities;
 }
 

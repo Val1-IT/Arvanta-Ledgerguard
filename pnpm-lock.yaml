@@ -17,6 +17,9 @@ importers:
       '@ledgerguard/datahub':
         specifier: workspace:*
         version: link:packages/datahub
+      '@ledgerguard/odoo':
+        specifier: workspace:*
+        version: link:packages/odoo
       '@ledgerguard/policy':
         specifier: workspace:*
         version: link:packages/policy
@@ -125,6 +128,19 @@ importers:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)
+
+  packages/odoo:
+    dependencies:
+      '@ledgerguard/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
