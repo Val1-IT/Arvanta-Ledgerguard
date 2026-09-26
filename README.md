@@ -43,7 +43,7 @@ LedgerGuard separates **probabilistic reasoning** from **deterministic execution
 Optional: @ledgerguard/datahub  (catalog context only — not authority)
 ```
 
-Status: **v0.1.0 pre-release**. Demonstrates the safety model on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
+Status: **v0.1.1**. Demonstrates the safety model on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
 
 License: [Apache-2.0](LICENSE)
 

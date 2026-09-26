@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1
+
+External usability / tester onboarding. No execution-integrity architecture changes.
+
+- One-command `pnpm demo` (in-memory duplicate-inventory scenario)
+- README leads with clone + `pnpm demo`; no Docker, `.env`, database, or API key for the basic demo
+- Fresh-clone CI on Ubuntu and Windows, including a repeat demo run
+- Asserted demo output (`DEMO PASS`) and additional demo safety tests
+- Tester bug-report CTA in README
+
 ## 0.1.0
 
 First public-facing LedgerGuard cut (GitHub source; packages are not published to npm).

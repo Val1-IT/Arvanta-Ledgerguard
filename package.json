@@ -1,6 +1,6 @@
 {
   "name": "ledgerguard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Open-source safety runtime for AI agents operating on systems of record. LLMs may investigate and propose repairs; LedgerGuard decides whether mutations may execute.",
   "license": "Apache-2.0",
