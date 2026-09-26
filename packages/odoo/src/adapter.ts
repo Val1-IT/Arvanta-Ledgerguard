@@ -13,6 +13,7 @@ import type {
   OdooJson2Transport,
   OdooQuantSnapshot
 } from './types';
+import { companiesMatch, validateInventoryAdjustmentAction } from './validate-action';
 
 export const ODOO_ADAPTER_VERSION = '0.3.0';
 
@@ -20,13 +21,6 @@ const ODOO_CAPABILITIES = {
   ...DEFAULT_ADAPTER_CAPABILITIES,
   supportsStateVersioning: true
 } as const;
-
-function asInventoryAction(action: ConstrainedAction): OdooInventoryAdjustmentAction {
-  if (action.type !== 'ODOO_INVENTORY_ADJUSTMENT') {
-    throw new Error(`Odoo adapter rejected action type ${action.type}`);
-  }
-  return action as OdooInventoryAdjustmentAction;
-}
 
 export class OdooInventoryAdapter implements ConstrainedActionAdapter {
   readonly meta: {
@@ -37,13 +31,8 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
   };
   private readonly transport: OdooJson2Transport;
 
-  constructor(options: { config?: OdooConnectionConfig; transport?: OdooJson2Transport; systemId?: string }) {
-    if (!options.transport && !options.config) {
-      throw new Error('OdooInventoryAdapter requires config or transport');
-    }
-    this.transport = guardedTransport(
-      options.transport ?? createJson2Transport(options.config as OdooConnectionConfig)
-    );
+  constructor(config: OdooConnectionConfig, options: { systemId?: string } = {}) {
+    this.transport = guardedTransport(createJson2Transport(config));
     this.meta = {
       systemId: options.systemId ?? 'odoo-19',
       systemType: 'odoo',
@@ -64,56 +53,66 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
   }
 
   async fingerprint(action: ConstrainedAction): Promise<string> {
-    const inventory = asInventoryAction(action);
-    const quant = await this.readQuant(inventory.quantId);
+    const validated = validateInventoryAdjustmentAction(action);
+    if (!validated.ok) {
+      throw new Error(validated.reason);
+    }
+    const quant = await this.readQuant(validated.action.quantId);
     return odooQuantFingerprint(quant);
   }
 
   async validate(action: ConstrainedAction): Promise<{ ok: true } | { ok: false; reason: string }> {
-    if (action.type !== 'ODOO_INVENTORY_ADJUSTMENT') {
-      return { ok: false, reason: `unsupported action ${action.type}` };
-    }
-    const inventory = asInventoryAction(action);
-    if (inventory.target.systemType !== 'odoo' || inventory.target.resourceType !== 'stock.quant') {
-      return { ok: false, reason: 'action target is not odoo stock.quant' };
-    }
-    if (inventory.target.resourceId !== String(inventory.quantId)) {
-      return { ok: false, reason: 'action target resourceId does not match quantId' };
-    }
-    if (!Number.isInteger(inventory.quantId) || inventory.quantId <= 0) {
-      return { ok: false, reason: 'quantId must be a positive integer' };
-    }
-    return { ok: true };
+    const validated = validateInventoryAdjustmentAction(action);
+    return validated.ok ? { ok: true } : { ok: false, reason: validated.reason };
   }
 
-  async execute(action: ConstrainedAction): Promise<{ httpSucceeded: boolean; stale?: boolean; detail: string }> {
-    const inventory = asInventoryAction(action);
+  async execute(action: ConstrainedAction): Promise<{
+    httpSucceeded: boolean;
+    stale?: boolean;
+    recoveryRequired?: boolean;
+    remoteWriteAttempted?: boolean;
+    detail: string;
+  }> {
+    const validated = validateInventoryAdjustmentAction(action);
+    if (!validated.ok) {
+      return { httpSucceeded: false, detail: validated.reason };
+    }
+    const inventory = validated.action;
     const current = await this.readQuant(inventory.quantId);
     const stale = this.preconditionFailure(inventory, current);
     if (stale) {
-      return { httpSucceeded: false, stale: true, detail: stale };
+      return { httpSucceeded: false, stale: true, remoteWriteAttempted: false, detail: stale };
     }
 
     await this.transport(ODOO_JSON2_MODEL, ODOO_JSON2_METHODS.write, {
       ids: [inventory.quantId],
       vals: { inventory_quantity: inventory.targetQuantity },
-      context: INVENTORY_MODE_CONTEXT
+      context: { ...INVENTORY_MODE_CONTEXT }
     });
 
     const applied = await this.transport(ODOO_JSON2_MODEL, ODOO_JSON2_METHODS.applyInventory, {
       ids: [inventory.quantId],
-      context: INVENTORY_MODE_CONTEXT
+      context: { ...INVENTORY_MODE_CONTEXT }
     });
 
     if (this.isConflictWizard(applied)) {
-      return { httpSucceeded: false, stale: true, detail: 'Odoo returned an inventory conflict wizard; treating as stale' };
+      return {
+        httpSucceeded: false,
+        recoveryRequired: true,
+        remoteWriteAttempted: true,
+        detail: 'Odoo returned an inventory conflict wizard after write; remote state is uncertain'
+      };
     }
 
-    return { httpSucceeded: true, detail: 'Odoo inventory adjustment RPC returned success' };
+    return { httpSucceeded: true, remoteWriteAttempted: true, detail: 'Odoo inventory adjustment RPC returned success' };
   }
 
   async verify(action: ConstrainedAction): Promise<{ pass: boolean; detail: string }> {
-    const inventory = asInventoryAction(action);
+    const validated = validateInventoryAdjustmentAction(action);
+    if (!validated.ok) {
+      return { pass: false, detail: validated.reason };
+    }
+    const inventory = validated.action;
     const quant = await this.readQuant(inventory.quantId);
     if (quant.productId !== inventory.productId) {
       return { pass: false, detail: 'product mismatch after mutation' };
@@ -121,7 +120,7 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
     if (quant.locationId !== inventory.locationId) {
       return { pass: false, detail: 'location mismatch after mutation' };
     }
-    if (inventory.companyId !== null && quant.companyId !== inventory.companyId) {
+    if (!companiesMatch(quant.companyId, inventory.companyId)) {
       return { pass: false, detail: 'company mismatch after mutation' };
     }
     if (!quantitiesEqual(quant.quantity, inventory.targetQuantity)) {
@@ -134,18 +133,21 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
   }
 
   async classifyRecovery(action: ConstrainedAction): Promise<StaleReservationClassification> {
-    const inventory = asInventoryAction(action);
+    const validated = validateInventoryAdjustmentAction(action);
+    if (!validated.ok) {
+      return 'ambiguous';
+    }
+    const inventory = validated.action;
     const quant = await this.readQuant(inventory.quantId);
-    if (
+    const identityMatches =
       quant.productId === inventory.productId &&
       quant.locationId === inventory.locationId &&
-      quantitiesEqual(quant.quantity, inventory.targetQuantity)
-    ) {
+      companiesMatch(quant.companyId, inventory.companyId);
+    if (identityMatches && quantitiesEqual(quant.quantity, inventory.targetQuantity)) {
       return 'applied';
     }
     if (
-      quant.productId === inventory.productId &&
-      quant.locationId === inventory.locationId &&
+      identityMatches &&
       quantitiesEqual(quant.quantity, inventory.expectedQuantity) &&
       quant.writeDate === inventory.expectedWriteDate
     ) {
@@ -161,7 +163,7 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
     if (quant.locationId !== action.locationId) {
       return 'location changed after approval';
     }
-    if (action.companyId !== null && quant.companyId !== action.companyId) {
+    if (!companiesMatch(quant.companyId, action.companyId)) {
       return 'company changed after approval';
     }
     if (!quantitiesEqual(quant.quantity, action.expectedQuantity)) {
@@ -183,11 +185,18 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
   }
 }
 
+/** Package-internal test helper. Not exported from `@ledgerguard/odoo`. */
+export function adapterFromTransport(transport: OdooJson2Transport, systemId = 'odoo-19'): OdooInventoryAdapter {
+  const adapter = new OdooInventoryAdapter({ baseUrl: 'http://127.0.0.1', apiKey: 'test' }, { systemId });
+  (adapter as unknown as { transport: OdooJson2Transport }).transport = guardedTransport(transport);
+  return adapter;
+}
+
 export function inventoryAdjustmentAction(input: {
   quantId: number;
   productId: number;
   locationId: number;
-  companyId?: number | null;
+  companyId: number | null;
   expectedQuantity: number;
   targetQuantity: number;
   expectedWriteDate: string;
@@ -202,7 +211,7 @@ export function inventoryAdjustmentAction(input: {
     quantId: input.quantId,
     productId: input.productId,
     locationId: input.locationId,
-    companyId: input.companyId ?? null,
+    companyId: input.companyId,
     expectedQuantity: input.expectedQuantity,
     targetQuantity: input.targetQuantity,
     expectedWriteDate: input.expectedWriteDate

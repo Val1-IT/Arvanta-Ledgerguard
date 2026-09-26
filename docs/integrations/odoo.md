@@ -2,7 +2,7 @@
 
 **Odoo support: experimental v0.3 — one constrained inventory action.**
 
-This is not a general Odoo connector, MCP server, or approval UI.
+This is an experimental adapter implementation plus a control-plane executor (`executeRemoteConstrainedAction`). It is not a general Odoo connector, MCP server, or approval UI. Do not treat HTTP 200 as verified success.
 
 ## Supported version
 
@@ -32,7 +32,7 @@ Against `stock.quant` using Odoo inventory-adjustment primitives:
 
 An HTTP 200 from Odoo is **not** `COMMITTED`. LedgerGuard only reports verified success after the re-read.
 
-If `action_apply_inventory` returns `stock.inventory.conflict`, the adapter treats the attempt as stale and does not claim success.
+If `write` has already been sent and `action_apply_inventory` returns `stock.inventory.conflict`, the adapter returns `RECOVERY_REQUIRED` with `remoteWriteAttempted: true`. It does not claim `STALE` / `mutated: false`.
 
 ## Environment
 

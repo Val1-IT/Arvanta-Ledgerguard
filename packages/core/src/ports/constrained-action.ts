@@ -24,6 +24,7 @@ export interface ConstrainedActionExecutionResult {
   fingerprintAfter: string | null;
   detail: string;
   mutated: boolean;
+  remoteWriteAttempted: boolean;
 }
 
 export interface ConstrainedActionAdapter {
@@ -41,7 +42,13 @@ export interface ConstrainedActionAdapter {
   };
   fingerprint(action: ConstrainedAction): Promise<string>;
   validate(action: ConstrainedAction): Promise<{ ok: true } | { ok: false; reason: string }>;
-  execute(action: ConstrainedAction): Promise<{ httpSucceeded: boolean; stale?: boolean; detail: string }>;
+  execute(action: ConstrainedAction): Promise<{
+    httpSucceeded: boolean;
+    stale?: boolean;
+    recoveryRequired?: boolean;
+    remoteWriteAttempted?: boolean;
+    detail: string;
+  }>;
   verify(action: ConstrainedAction): Promise<{ pass: boolean; detail: string }>;
   classifyRecovery(action: ConstrainedAction): Promise<'applied' | 'not_applied' | 'ambiguous'>;
 }

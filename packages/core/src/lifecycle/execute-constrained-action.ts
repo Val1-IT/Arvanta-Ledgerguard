@@ -11,6 +11,15 @@ export class StaleActionError extends Error {
   }
 }
 
+function baseResult(
+  partial: Omit<ConstrainedActionExecutionResult, 'remoteWriteAttempted'> & { remoteWriteAttempted?: boolean }
+): ConstrainedActionExecutionResult {
+  return {
+    ...partial,
+    remoteWriteAttempted: partial.remoteWriteAttempted ?? false
+  };
+}
+
 export async function executeConstrainedAction(
   adapter: ConstrainedActionAdapter,
   action: ConstrainedAction,
@@ -18,7 +27,7 @@ export async function executeConstrainedAction(
 ): Promise<ConstrainedActionExecutionResult> {
   const validated = await adapter.validate(action);
   if (!validated.ok) {
-    return {
+    return baseResult({
       outcome: 'REJECTED',
       httpSucceeded: false,
       verified: false,
@@ -26,12 +35,12 @@ export async function executeConstrainedAction(
       fingerprintAfter: null,
       detail: validated.reason,
       mutated: false
-    };
+    });
   }
 
   const fingerprintBefore = await adapter.fingerprint(action);
   if (expectedFingerprint && expectedFingerprint !== fingerprintBefore) {
-    return {
+    return baseResult({
       outcome: 'STALE',
       httpSucceeded: false,
       verified: false,
@@ -39,56 +48,73 @@ export async function executeConstrainedAction(
       fingerprintAfter: null,
       detail: 'Source state changed after approval; re-investigation required',
       mutated: false
-    };
+    });
   }
 
   const executed = await adapter.execute(action);
+  if (executed.recoveryRequired) {
+    const fingerprintAfter = await adapter.fingerprint(action).catch(() => null);
+    return baseResult({
+      outcome: 'RECOVERY_REQUIRED',
+      httpSucceeded: Boolean(executed.httpSucceeded),
+      verified: false,
+      fingerprintBefore,
+      fingerprintAfter,
+      detail: executed.detail,
+      mutated: true,
+      remoteWriteAttempted: executed.remoteWriteAttempted ?? true
+    });
+  }
   if (executed.stale) {
-    return {
+    return baseResult({
       outcome: 'STALE',
       httpSucceeded: false,
       verified: false,
       fingerprintBefore,
       fingerprintAfter: null,
       detail: executed.detail,
-      mutated: false
-    };
+      mutated: false,
+      remoteWriteAttempted: executed.remoteWriteAttempted ?? false
+    });
   }
 
   const fingerprintAfter = await adapter.fingerprint(action);
   const verification = await adapter.verify(action);
 
   if (!executed.httpSucceeded) {
-    return {
+    return baseResult({
       outcome: 'REJECTED',
       httpSucceeded: false,
       verified: false,
       fingerprintBefore,
       fingerprintAfter,
       detail: executed.detail,
-      mutated: false
-    };
+      mutated: false,
+      remoteWriteAttempted: executed.remoteWriteAttempted ?? false
+    });
   }
 
   if (!verification.pass) {
-    return {
+    return baseResult({
       outcome: 'VERIFICATION_FAILED',
       httpSucceeded: true,
       verified: false,
       fingerprintBefore,
       fingerprintAfter,
       detail: verification.detail,
-      mutated: true
-    };
+      mutated: true,
+      remoteWriteAttempted: true
+    });
   }
 
-  return {
+  return baseResult({
     outcome: 'VERIFIED',
     httpSucceeded: true,
     verified: true,
     fingerprintBefore,
     fingerprintAfter,
     detail: verification.detail,
-    mutated: true
-  };
+    mutated: true,
+    remoteWriteAttempted: true
+  });
 }
