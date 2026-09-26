@@ -25,16 +25,24 @@ Failure / recovery statuses:
 
 `DENIED | STALE | VERIFICATION_FAILED | ROLLED_BACK | RECOVERY_REQUIRED | FAILED | ALREADY_EXECUTED`
 
-These statuses appear on the structured `ExecutionReceipt`. The demo plan row still uses the v0.1 remediation state machine (`APPROVED` → `EXECUTING` → `VERIFYING` → `RESOLVED`).
+These statuses appear on the structured `ExecutionReceipt`. The demo plan row uses `APPROVED` → `EXECUTING` → `VERIFYING` → `RESOLVED`. Crash recovery may use recovery-only transitions `EXECUTING|VERIFYING → RESOLVED` (applied) or `→ INTERRUPTED` (not applied). `INTERRUPTED → EXECUTING` resumes the original approval; it is not a new approval.
+
+Reserved-key recovery runs **before** fresh execution policy and **before** `APPROVED → EXECUTING`. An in-flight leftover is not treated as a new execution attempt.
+
+## PostgreSQL atomicity vs other adapters
+
+On PostgreSQL, `beforeCommit` writes the idempotency completion, execution journal, and `VERIFYING`/`RESOLVED` plan transitions on the **same client** as the verified mutations. `onWritesApplied` is not used for the default Postgres adapter.
+
+Adapters without `idempotencyInNativeTransaction` still persist `VERIFYING` on a separate connection. Recovery remains the protocol for those leftovers. This is not exactly-once delivery.
 
 ## What v0.2 changes
 
 - **Source-state fingerprint.** SHA-256 of the approved correction set. Stored on the receipt so later audit can see what was authorized.
 - **In-transaction idempotency completion (PostgreSQL).** `completed` and the execution journal row are written on the same client as the ERP mutations, after verification PASS and before `COMMIT`. A crash no longer leaves `reserved` after a committed repair.
-- **Stale `reserved` recovery.** Reservations carry a lease (default 60s). After expiry, LedgerGuard re-reads live state:
-  - already applied → mark `completed` / `ALREADY_EXECUTED`
-  - never applied → `failed_retryable` so a later authorized attempt may reserve
-  - anything else → `RECOVERY_REQUIRED` (no mutation)
+- **Stale `reserved` recovery.** Reservations carry a lease (default 60s). After expiry, LedgerGuard re-reads live state **before** approval/EXECUTING gates:
+  - applied (verification PASS + expectations + after-values) → complete key, journal, plan `RESOLVED`, `ALREADY_EXECUTED`
+  - not applied → `failed_retryable`; `EXECUTING`/`VERIFYING` become `INTERRUPTED` for a controlled retry
+  - anything else, including vanished incidents with failed postconditions → `RECOVERY_REQUIRED` (no mutation, key stays reserved)
 - **Adapter capability flags.** PostgreSQL advertises `nativeTransactions` and `idempotencyInNativeTransaction`. Callers must not assume other adapters can do the same.
 - **Invariant primitives.** Existing quality checks are grouped as `InventoryInvariants` / `FinanceInvariants` without changing their evaluators.
 

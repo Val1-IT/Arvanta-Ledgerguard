@@ -3,7 +3,6 @@ import type { Pool } from 'pg';
 import {
   adapterCapabilitiesOrDefault,
   buildExecutionReceipt,
-  classifyStaleReservation,
   executeConstrainedRemediation,
   ExecutionStatus,
   sourceStateFingerprint,
@@ -28,12 +27,13 @@ import {
   DEFAULT_POLICY_CONFIG
 } from '@ledgerguard/policy';
 import { applyRemediationPlanTransition, loadRemediationPlan } from '../db/repositories/remediation-plans';
+import { recoverExpiredReservation, reconcileCompletedExecution } from './recover-execution';
 import {
   InvalidTransitionError,
   RemediationPlanNotFoundError,
   isTransitionAllowed,
+  type ExecuteRemediationPlanResult,
   type ExecutionFailureReason,
-  type RemediationExecutionOutcome,
   type RemediationExecutionResult,
   type RemediationPlanRecord
 } from './types';
@@ -54,18 +54,14 @@ export interface ExecuteRemediationPlanDeps {
   executionKeys?: PostgresExecutionKeyStore;
 }
 
+export type { ExecuteRemediationPlanResult };
+
 function impactFromPlan(plan: RemediationPlanRecord): number {
   return plan.proposedCorrections.reduce((sum, correction) => {
     if (!correction.financialDelta) return sum;
     const amount = Number(correction.financialDelta);
     return Number.isFinite(amount) ? sum + Math.abs(amount) : sum;
   }, 0);
-}
-
-export interface ExecuteRemediationPlanResult {
-  plan: RemediationPlanRecord;
-  outcome: RemediationExecutionOutcome;
-  receipt?: ExecutionReceipt;
 }
 
 export async function executeRemediationPlan(
@@ -87,102 +83,100 @@ export async function executeRemediationPlan(
   const existingKey = await keys.get(idempotencyKey);
 
   if (existingKey?.state === 'completed') {
+    return reconcileCompletedExecution({
+      db: pool,
+      keys,
+      adapter: readAdapter,
+      plan,
+      idempotencyKey,
+      authorityActorId: authority.actorId,
+      now: now(),
+      audit
+    });
+  }
+
+  if (existingKey?.state === 'reserved') {
+    if (!keys.isLeaseExpired(existingKey, now())) {
+      throw new ConcurrentExecutionError();
+    }
+    return recoverExpiredReservation({
+      db: pool,
+      keys,
+      adapter: readAdapter,
+      plan,
+      idempotencyKey,
+      authorityActorId: authority.actorId,
+      now: now(),
+      audit
+    });
+  }
+
+  if (plan.state === 'INTERRUPTED') {
+    authorizeResume(plan, input.expectedVersion);
+  } else {
+    const decision = evaluateExecutionPolicy({
+      evidenceCount: plan.proposedCorrections.length,
+      verificationExpectationCount: plan.verificationExpectations.length,
+      impactAmount: impactFromPlan(plan),
+      authority,
+      plan: {
+        state: plan.state,
+        version: plan.version,
+        approvalAction: plan.approvalAction,
+        approvedBy: plan.approvedBy
+      },
+      expectedVersion: input.expectedVersion,
+      config: policyConfig,
+      idempotencyCompleted: false
+    });
+
     audit.append({
       occurredAt: now().toISOString(),
-      type: 'idempotency.duplicate',
+      type: 'policy.evaluated',
       actorId: authority.actorId,
       planId: plan.id,
-      payload: { idempotencyKey, outcome: 'ALREADY_EXECUTED' }
+      payload: { decision, idempotencyKey }
     });
-    return { plan, outcome: 'ALREADY_EXECUTED' };
-  }
+    audit.append({
+      occurredAt: now().toISOString(),
+      type: 'authority.checked',
+      actorId: authority.actorId,
+      planId: plan.id,
+      payload: { actorType: authority.actorType, capabilities: authority.capabilities, source: authority.source }
+    });
 
-  const decision = evaluateExecutionPolicy({
-    evidenceCount: plan.proposedCorrections.length,
-    verificationExpectationCount: plan.verificationExpectations.length,
-    impactAmount: impactFromPlan(plan),
-    authority,
-    plan: {
-      state: plan.state,
-      version: plan.version,
-      approvalAction: plan.approvalAction,
-      approvedBy: plan.approvedBy
-    },
-    expectedVersion: input.expectedVersion,
-    config: policyConfig,
-    idempotencyCompleted: false
-  });
-
-  audit.append({
-    occurredAt: now().toISOString(),
-    type: 'policy.evaluated',
-    actorId: authority.actorId,
-    planId: plan.id,
-    payload: { decision, idempotencyKey }
-  });
-  audit.append({
-    occurredAt: now().toISOString(),
-    type: 'authority.checked',
-    actorId: authority.actorId,
-    planId: plan.id,
-    payload: { actorType: authority.actorType, capabilities: authority.capabilities, source: authority.source }
-  });
-
-  if (decision.outcome === 'DENY') {
-    throw new PolicyDeniedError('Policy denied execution', decision);
-  }
-  if (decision.outcome === 'REQUIRE_APPROVAL') {
-    throw new ApprovalRequiredError('Human approval is required before execution', decision);
+    if (decision.outcome === 'DENY') {
+      throw new PolicyDeniedError('Policy denied execution', decision);
+    }
+    if (decision.outcome === 'REQUIRE_APPROVAL') {
+      throw new ApprovalRequiredError('Human approval is required before execution', decision);
+    }
   }
 
   if (!isTransitionAllowed(plan.state, 'EXECUTING')) {
     throw new InvalidTransitionError(input.planId, plan.state, 'EXECUTING');
   }
 
-  let reservation = await keys.reserve({
+  const reservation = await keys.reserve({
     key: idempotencyKey,
     planId: plan.id,
     planVersion: input.expectedVersion,
     now: now()
   });
   if (reservation === 'already_completed') {
-    audit.append({
-      occurredAt: now().toISOString(),
-      type: 'idempotency.duplicate',
-      actorId: authority.actorId,
-      planId: plan.id,
-      payload: { idempotencyKey, outcome: 'ALREADY_EXECUTED' }
-    });
-    return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
-  }
-  if (reservation === 'in_flight') {
-    const recovered = await recoverStaleReservation({
+    return reconcileCompletedExecution({
+      db: pool,
       keys,
       adapter: readAdapter,
       plan,
       idempotencyKey,
-      now: now()
+      authorityActorId: authority.actorId,
+      now: now(),
+      audit
     });
-    if (recovered === 'completed') {
-      return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
-    }
-    if (recovered === 'recovery_required') {
-      return { plan, outcome: 'RECOVERY_REQUIRED' };
-    }
-    if (recovered === 'failed_retryable') {
-      reservation = await keys.reserve({
-        key: idempotencyKey,
-        planId: plan.id,
-        planVersion: input.expectedVersion,
-        now: now()
-      });
-    }
-    if (reservation === 'in_flight') {
-      throw new ConcurrentExecutionError();
-    }
-    if (reservation === 'already_completed') {
-      return { plan: (await loadRemediationPlan(pool, plan.id)) ?? plan, outcome: 'ALREADY_EXECUTED' };
-    }
+  }
+  if (reservation === 'in_flight') {
+    throw new ConcurrentExecutionError();
   }
 
   audit.append({
@@ -212,6 +206,7 @@ export async function executeRemediationPlan(
   const capabilities = adapterCapabilitiesOrDefault(readAdapter.meta.capabilities);
   let completedInTransaction = false;
   let inTransactionReceipt: ExecutionReceipt | undefined;
+  const usingPostgresNativeTx = !deps.adapter;
 
   const mutationAdapter =
     deps.adapter ??
@@ -248,6 +243,28 @@ export async function executeRemediationPlan(
           receipt,
           now: now()
         });
+        currentRecord = await applyRemediationPlanTransition(client, input.planId, currentRecord.version, {
+          state: 'VERIFYING',
+          updatedAt: now().toISOString()
+        });
+        currentRecord = await applyRemediationPlanTransition(client, input.planId, currentRecord.version, {
+          state: 'RESOLVED',
+          updatedAt: now().toISOString(),
+          executionResultJson: JSON.stringify({
+            startedAt,
+            finishedAt: now().toISOString(),
+            steps: (verified as { steps?: unknown }).steps ?? [],
+            failureReason: null,
+            failureDetail: null,
+            outcome: 'EXECUTED',
+            receipt
+          }),
+          executedAt: now().toISOString(),
+          verificationJson: JSON.stringify({
+            verifiedAt: now().toISOString(),
+            result: (verified as { verification?: unknown }).verification
+          })
+        });
         completedInTransaction = true;
         inTransactionReceipt = receipt;
       }
@@ -256,12 +273,14 @@ export async function executeRemediationPlan(
   const result = await executeConstrainedRemediation(mutationAdapter, {
     approvedCorrections: plan.proposedCorrections,
     now,
-    onWritesApplied: async () => {
-      currentRecord = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
-        state: 'VERIFYING',
-        updatedAt: now().toISOString()
-      });
-    }
+    onWritesApplied: usingPostgresNativeTx
+      ? undefined
+      : async () => {
+          currentRecord = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
+            state: 'VERIFYING',
+            updatedAt: now().toISOString()
+          });
+        }
   });
 
   const finishedAt = now().toISOString();
@@ -309,6 +328,9 @@ export async function executeRemediationPlan(
       planId: plan.id,
       payload: { verification: result.verification.overallStatus, receipt }
     });
+    if (currentRecord.state === 'RESOLVED') {
+      return { plan: currentRecord, outcome: 'EXECUTED', receipt };
+    }
     const resolved = await applyRemediationPlanTransition(pool, input.planId, currentRecord.version, {
       state: 'RESOLVED',
       updatedAt: finishedAt,
@@ -367,33 +389,16 @@ export async function executeRemediationPlan(
   return { plan: failed, outcome: 'FAILED', receipt: failedReceipt };
 }
 
-async function recoverStaleReservation(input: {
-  keys: PostgresExecutionKeyStore;
-  adapter: SystemOfRecordAdapter;
-  plan: RemediationPlanRecord;
-  idempotencyKey: string;
-  now: Date;
-}): Promise<'completed' | 'failed_retryable' | 'recovery_required' | 'in_flight'> {
-  const existing = await input.keys.get(input.idempotencyKey);
-  if (!existing || !input.keys.isLeaseExpired(existing, input.now)) {
-    return 'in_flight';
+function authorizeResume(plan: RemediationPlanRecord, expectedVersion: number): void {
+  if (plan.version !== expectedVersion) {
+    throw new ApprovalRequiredError('Interrupted execution no longer matches the expected plan version', {
+      currentVersion: plan.version,
+      expectedVersion
+    });
   }
-
-  let snapshot;
-  try {
-    snapshot = await input.adapter.runInTransaction((session) => session.loadInvestigationInput());
-  } catch {
-    return 'recovery_required';
+  if (plan.approvalAction !== 'APPROVE') {
+    throw new ApprovalRequiredError('Interrupted execution is missing the original approval', {
+      approvalAction: plan.approvalAction
+    });
   }
-
-  const classification = classifyStaleReservation({
-    snapshot,
-    approvedCorrections: input.plan.proposedCorrections
-  });
-  return input.keys.recoverExpiredReservation({
-    key: input.idempotencyKey,
-    classification,
-    now: input.now,
-    receipt: { status: 'STALE_RESERVED_RECOVERY', classification }
-  });
 }

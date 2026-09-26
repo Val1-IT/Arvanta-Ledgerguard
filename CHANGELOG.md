@@ -6,7 +6,10 @@ Reliability slice for execution integrity. Not a full adapter SDK and not exactl
 
 - Structured `ExecutionReceipt` with source-state fingerprint and lifecycle status
 - PostgreSQL completes the idempotency key and writes `ledgerguard_execution_journal` in the same transaction as verified mutations
-- Stale `reserved` keys gain a lease and deterministic recovery (`ALREADY_EXECUTED` / retryable / `RECOVERY_REQUIRED`)
+- Stale `reserved` keys gain a lease; recovery runs before fresh approval/EXECUTING gates
+- Applied recovery verifies postconditions, persists a recovered receipt/journal, and reconciles the plan to `RESOLVED`
+- Not-applied leftovers become `INTERRUPTED` for a controlled retry; ambiguous leftovers return `RECOVERY_REQUIRED`
+- PostgreSQL writes `VERIFYING`/`RESOLVED` on the same client as verified mutations (not a split pool update)
 - Adapter capability flags: `nativeTransactions`, `idempotencyInNativeTransaction`
 - Inventory and finance invariant primitives re-export the existing quality checks
 - v0.1 public investigation, policy, and allowlisted correction behavior is unchanged

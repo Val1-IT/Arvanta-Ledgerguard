@@ -11,7 +11,12 @@ export const SafetyAuditEventTypeSchema = z.enum([
   'execution.started',
   'execution.verified',
   'execution.committed',
-  'execution.rolled_back'
+  'execution.rolled_back',
+  'execution.recovery_started',
+  'execution.recovery_applied_verified',
+  'execution.recovery_not_applied',
+  'execution.recovery_ambiguous',
+  'execution.reconciled'
 ]);
 
 export type SafetyAuditEventType = z.infer<typeof SafetyAuditEventTypeSchema>;

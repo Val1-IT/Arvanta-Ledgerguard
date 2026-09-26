@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { ProposedCorrectionSchema, VerificationExpectationSchema, VerificationResultSchema } from '@ledgerguard/core';
+import {
+  ProposedCorrectionSchema,
+  VerificationExpectationSchema,
+  VerificationResultSchema,
+  type ExecutionReceipt
+} from '@ledgerguard/core';
 
 // ---------------------------------------------------------------------------
 // FASE 6 — approval + verified remediation workflow. Types only: no I/O, no
@@ -30,6 +35,7 @@ export const RemediationPlanStateSchema = z.enum([
   'EXECUTION_FAILED',
   'VERIFYING',
   'VERIFICATION_FAILED',
+  'INTERRUPTED',
   'RESOLVED'
 ]);
 export type RemediationPlanState = z.infer<typeof RemediationPlanStateSchema>;
@@ -52,11 +58,24 @@ export const ALLOWED_TRANSITIONS: Readonly<Record<RemediationPlanState, readonly
   EXECUTION_FAILED: [],
   VERIFYING: ['VERIFICATION_FAILED', 'RESOLVED'],
   VERIFICATION_FAILED: [],
+  INTERRUPTED: ['EXECUTING'],
   RESOLVED: []
 };
 
 export function isTransitionAllowed(from: RemediationPlanState, to: RemediationPlanState): boolean {
   return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
+export const RECOVERY_ONLY_TRANSITIONS: Readonly<
+  Partial<Record<RemediationPlanState, readonly RemediationPlanState[]>>
+> = {
+  APPROVED: ['RESOLVED'],
+  EXECUTING: ['RESOLVED', 'INTERRUPTED'],
+  VERIFYING: ['RESOLVED', 'INTERRUPTED']
+};
+
+export function isRecoveryTransitionAllowed(from: RemediationPlanState, to: RemediationPlanState): boolean {
+  return RECOVERY_ONLY_TRANSITIONS[from]?.includes(to) === true;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +121,8 @@ export const RemediationExecutionOutcomeSchema = z.enum([
   'EXECUTED',
   'ALREADY_EXECUTED',
   'FAILED',
-  'RECOVERY_REQUIRED'
+  'RECOVERY_REQUIRED',
+  'INTERRUPTED'
 ]);
 export type RemediationExecutionOutcome = z.infer<typeof RemediationExecutionOutcomeSchema>;
 
@@ -192,6 +212,12 @@ export const RemediationPlanRecordSchema = z.object({
   updatedAt: z.string()
 });
 export type RemediationPlanRecord = z.infer<typeof RemediationPlanRecordSchema>;
+
+export interface ExecuteRemediationPlanResult {
+  plan: RemediationPlanRecord;
+  outcome: RemediationExecutionOutcome;
+  receipt?: ExecutionReceipt;
+}
 
 // ---------------------------------------------------------------------------
 // Errors thrown by the workflow modules (approval/execution). Kept here so

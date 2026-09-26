@@ -1,5 +1,6 @@
 import type { VerificationResult } from '../types';
 import type { AdapterCapabilities } from '../ports/system-of-record';
+import type { StaleReservationClassification } from './classify-stale-reservation';
 import type { ExecutionStatusName } from './execution-status';
 
 export const EXECUTION_RECEIPT_SCHEMA_VERSION = '0.2' as const;
@@ -22,6 +23,8 @@ export interface ExecutionReceipt {
   adapter: ExecutionReceiptAdapter;
   verificationOverallStatus: VerificationResult['overallStatus'] | null;
   committed: boolean;
+  recovered: boolean;
+  recoveryClassification: StaleReservationClassification | null;
   occurredAt: string;
 }
 
@@ -44,6 +47,8 @@ export function buildExecutionReceipt(input: {
   adapter: ExecutionReceiptAdapter;
   verificationOverallStatus?: VerificationResult['overallStatus'] | null;
   committed: boolean;
+  recovered?: boolean;
+  recoveryClassification?: StaleReservationClassification | null;
   occurredAt: string;
 }): ExecutionReceipt {
   return {
@@ -57,6 +62,8 @@ export function buildExecutionReceipt(input: {
     adapter: input.adapter,
     verificationOverallStatus: input.verificationOverallStatus ?? null,
     committed: input.committed,
+    recovered: input.recovered ?? false,
+    recoveryClassification: input.recoveryClassification ?? null,
     occurredAt: input.occurredAt
   };
 }

@@ -155,13 +155,18 @@ export class PostgresExecutionKeyStore {
     }
 
     if (input.classification === 'applied') {
-      await this.db.query(
+      const completed = await this.db.query(
         `update ledgerguard_execution_keys
             set state = 'completed', completed_at = $2, result_json = $3, lease_expires_at = null
-          where key = $1 and state = 'reserved'`,
+          where key = $1 and state = 'reserved'
+          returning key`,
         [input.key, input.now, JSON.stringify(input.receipt ?? { status: 'RECOVERED_APPLIED' })]
       );
-      return 'completed';
+      if ((completed.rowCount ?? completed.rows.length) > 0) {
+        return 'completed';
+      }
+      const raced = await this.get(input.key);
+      return raced?.state === 'completed' ? 'completed' : 'in_flight';
     }
 
     if (input.classification === 'not_applied') {

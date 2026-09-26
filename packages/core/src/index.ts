@@ -47,6 +47,8 @@ export {
 } from './lifecycle/execution-receipt';
 export {
   classifyStaleReservation,
+  approvedCorrectionsApplied,
+  expectationsHold,
   type StaleReservationClassification
 } from './lifecycle/classify-stale-reservation';
 export {

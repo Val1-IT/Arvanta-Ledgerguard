@@ -153,6 +153,18 @@ export async function executeRemediationPlanAction(input: {
       };
     }
 
+    if (executed.outcome === 'INTERRUPTED') {
+      revalidateIncident(input.investigationId);
+      return {
+        ok: true,
+        planId: plan.id,
+        state: plan.state,
+        version: plan.version,
+        message:
+          'A previous execution reservation expired before the mutation committed. The plan is interrupted and may be retried with the original approval. No additional mutation was applied.'
+      };
+    }
+
     if (executed.outcome === 'RECOVERY_REQUIRED') {
       revalidateIncident(input.investigationId);
       return {

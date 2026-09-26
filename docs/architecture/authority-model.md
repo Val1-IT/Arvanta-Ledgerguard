@@ -68,7 +68,7 @@ PostgreSQL table `ledgerguard_execution_keys` enforces uniqueness on the executi
 
 On PostgreSQL, `completed` and `ledgerguard_execution_journal` are written on the **same client** as the ERP mutations, after verification PASS and before `COMMIT`. Mutation and idempotency completion commit atomically. This is not exactly-once delivery, and it does not apply to adapters without native transactions.
 
-A `reserved` key whose lease has expired is recovered from live state: already applied → `completed`; never applied → `failed_retryable`; otherwise `RECOVERY_REQUIRED` with no mutation. Unexpired reservations stay `in_flight`.
+A `reserved` key whose lease has expired is recovered **before** fresh execution policy. Applied recovery requires verification PASS, plan expectations, and applied after-values — not merely a vanished incident. Never-applied in-flight plans become `INTERRUPTED`. Ambiguous leftovers return `RECOVERY_REQUIRED` with no mutation. Unexpired reservations stay `in_flight`.
 
 ## DataHub
 
