@@ -36,6 +36,13 @@
       "when": 1785123600000,
       "tag": "0004_duplicate_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787800000000,
+      "tag": "0005_execution_journal",
+      "breakpoints": true
     }
   ]
 }

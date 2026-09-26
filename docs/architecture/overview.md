@@ -5,9 +5,10 @@ This is the system-level map of LedgerGuard. For module-level detail see:
 - [`financial-integrity-engine.md`](financial-integrity-engine.md) — the
   deterministic engine (FASE 4)
 - [`trust-boundary.md`](trust-boundary.md) — DataHub sits outside execution authority
+- [`execution-integrity.md`](execution-integrity.md) — DETECT → AUTHORIZE → EXECUTE → VERIFY and v0.2 receipts
 - [`authority-model.md`](authority-model.md) — policy, capabilities, approval, idempotency
 - [`duplicate-inventory-movement.md`](duplicate-inventory-movement.md) — second detector scenario
-- [`../threat-model.md`](../threat-model.md) — what v0.1 does and does not protect
+- [`../threat-model.md`](../threat-model.md) — what LedgerGuard does and does not protect
 - [`v0.1-blockers.md`](v0.1-blockers.md) — remaining honesty list
 - [`investigation-agent.md`](investigation-agent.md) — the DataHub-aware agent
   (FASE 5)

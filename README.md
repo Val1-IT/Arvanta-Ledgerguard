@@ -1,11 +1,11 @@
 # LedgerGuard
 
-**A safety runtime for AI agents operating on systems of record.**
+**A deterministic execution integrity runtime for AI agents operating on systems of record.**
 
 AI agents may inspect ledgers, correlate evidence, and propose repairs.
 They must not receive mutation authority merely because an LLM generated a tool call.
 
-LedgerGuard separates **probabilistic reasoning** from **deterministic execution authority**.
+LedgerGuard separates **probabilistic reasoning** from **deterministic execution authority**. An approved mutation is not successful until postconditions are verified against the system of record.
 
 ```
                   AI / AGENT
@@ -43,7 +43,7 @@ LedgerGuard separates **probabilistic reasoning** from **deterministic execution
 Optional: @ledgerguard/datahub  (catalog context only — not authority)
 ```
 
-Status: **v0.1.1**. Demonstrates the safety model on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
+Status: **v0.2.0**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
 
 License: [Apache-2.0](LICENSE)
 
@@ -139,7 +139,7 @@ pnpm verify:integration
 
 Receipt RCP-001 received **10** units. A duplicated event posted MOV-001 **+10** and MOV-002 **+10**. Inventory shows **20** / **1,700,000**. The detector uses shared `eventIdentity` + receipt + quantity — not an LLM “these look similar” guess. Repair reverses **only MOV-002**. Expected state: quantity **10**, valuation **850,000**. A completed idempotency key returns `ALREADY_EXECUTED` and does not mutate again.
 
-These are the only detectors in v0.1. LedgerGuard does not claim to detect arbitrary ERP failures.
+These are the only detectors in v0.2. LedgerGuard does not claim to detect arbitrary ERP failures.
 
 ## Packages
 
@@ -161,18 +161,21 @@ The Next.js app under `app/` is a demo shell, not the runtime.
 - Deterministic policy (not prompts)
 - Trusted runtime supplies capabilities; agents cannot self-approve
 - Approval is bound to plan id + version
+- Source-state fingerprint on the execution receipt
 - Persisted idempotency keys; completed replay → `ALREADY_EXECUTED`
+- PostgreSQL records `completed` in the same transaction as the verified mutation
+- Expired `reserved` keys are recovered or raised as `RECOVERY_REQUIRED`
 - `DRIFT_DETECTED` when live state no longer matches the approved snapshot
 - Verify-before-commit; verification failure rolls back
 - DataHub failure does not roll back a verified system-of-record repair
 
-See [docs/architecture/authority-model.md](docs/architecture/authority-model.md) and [docs/threat-model.md](docs/threat-model.md).
+See [docs/architecture/execution-integrity.md](docs/architecture/execution-integrity.md), [docs/architecture/authority-model.md](docs/architecture/authority-model.md) and [docs/threat-model.md](docs/threat-model.md).
 
-## Known v0.1 limitations
+## Known v0.2 limitations
 
 - **Demo authority.** The demo mints `incident-ui` with full capabilities in server code. There is no production authentication.
-- **Idempotency crash window.** Between SQL `COMMIT` and marking the key `completed`, a crash can leave the key `reserved`. This is not exactly-once delivery.
-- **Detector precedence.** Conversion mismatch wins if both incidents exist. v0.1 does not aggregate simultaneous root causes.
+- **Not exactly-once.** PostgreSQL same-database atomicity closes the post-COMMIT reserved-key window. Other adapters and ambiguous expired reservations are not exactly-once.
+- **Detector precedence.** Conversion mismatch wins if both incidents exist. Simultaneous root causes are not aggregated.
 - **Adapter scope.** PostgreSQL is the execution adapter. Odoo / ERPNext / REST are future work.
 
 ## Development

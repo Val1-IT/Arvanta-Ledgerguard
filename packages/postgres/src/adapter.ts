@@ -5,11 +5,13 @@ import {
 } from '@ledgerguard/core';
 import type { Pool, PoolClient } from 'pg';
 import { applyAllowlistedCorrection } from './apply-correction';
+import type { Queryable } from './queryable';
 import { loadInvestigationInput } from './repositories/investigation';
 
 export interface PostgresSystemOfRecordAdapterOptions {
   cogsAccountCode?: string;
   systemId?: string;
+  beforeCommit?: (client: Queryable, result: unknown) => Promise<void>;
 }
 
 class PostgresSession implements SystemOfRecordSession {
@@ -30,17 +32,24 @@ class PostgresSession implements SystemOfRecordSession {
 }
 
 export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
-  readonly meta: { systemId: string; systemType: 'postgres' };
+  readonly meta: {
+    systemId: string;
+    systemType: 'postgres';
+    capabilities: { nativeTransactions: true; idempotencyInNativeTransaction: true };
+  };
   private readonly cogsAccountCode: string;
+  private readonly beforeCommit?: (client: Queryable, result: unknown) => Promise<void>;
 
   constructor(
     private readonly pool: Pool,
     options: PostgresSystemOfRecordAdapterOptions = {}
   ) {
     this.cogsAccountCode = options.cogsAccountCode ?? CONVERSION_MISMATCH_EXAMPLE.cogsAccountCode;
+    this.beforeCommit = options.beforeCommit;
     this.meta = {
       systemId: options.systemId ?? 'postgres-inventory-ledger',
-      systemType: 'postgres'
+      systemType: 'postgres',
+      capabilities: { nativeTransactions: true, idempotencyInNativeTransaction: true }
     };
   }
 
@@ -49,6 +58,9 @@ export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
     try {
       await client.query('BEGIN');
       const result = await work(new PostgresSession(client, this.cogsAccountCode));
+      if (this.beforeCommit) {
+        await this.beforeCommit(client, result);
+      }
       await client.query('COMMIT');
       return result;
     } catch (error) {

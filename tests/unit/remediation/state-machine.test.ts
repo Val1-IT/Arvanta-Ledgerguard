@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_TRANSITIONS, RemediationPlanStateSchema, TERMINAL_STATES, isTransitionAllowed } from '../../../src/remediation/types';
+import {
+  ALLOWED_TRANSITIONS,
+  RemediationPlanStateSchema,
+  TERMINAL_STATES,
+  isRecoveryTransitionAllowed,
+  isTransitionAllowed
+} from '../../../src/remediation/types';
 
 // ---------------------------------------------------------------------------
 // FASE 6 test checklist item 1/14 — pure state-machine logic, no I/O. Every
@@ -51,5 +57,15 @@ describe('remediation plan state machine — exhaustive transition matrix', () =
     expect(isTransitionAllowed('PENDING_APPROVAL', 'REJECTED')).toBe(true);
     expect(isTransitionAllowed('EXECUTING', 'EXECUTION_FAILED')).toBe(true);
     expect(isTransitionAllowed('VERIFYING', 'VERIFICATION_FAILED')).toBe(true);
+  });
+
+  it('recovery-only transitions can reconcile in-flight plans without broadening the normal table', () => {
+    expect(isTransitionAllowed('EXECUTING', 'RESOLVED')).toBe(false);
+    expect(isTransitionAllowed('VERIFYING', 'INTERRUPTED')).toBe(false);
+    expect(isRecoveryTransitionAllowed('EXECUTING', 'RESOLVED')).toBe(true);
+    expect(isRecoveryTransitionAllowed('VERIFYING', 'RESOLVED')).toBe(true);
+    expect(isRecoveryTransitionAllowed('EXECUTING', 'INTERRUPTED')).toBe(true);
+    expect(isRecoveryTransitionAllowed('VERIFYING', 'INTERRUPTED')).toBe(true);
+    expect(isTransitionAllowed('INTERRUPTED', 'EXECUTING')).toBe(true);
   });
 });

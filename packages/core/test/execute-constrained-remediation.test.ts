@@ -127,6 +127,7 @@ describe('executeConstrainedRemediation', () => {
     expect(result.committed).toBe(true);
     expect(result.failureReason).toBeNull();
     expect(result.verification?.overallStatus).toBe('PASS');
+    expect(result.sourceStateFingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(adapter.commits).toBe(1);
     expect(adapter.rollbacks).toBe(0);
     expect(writesHook).toBe(1);

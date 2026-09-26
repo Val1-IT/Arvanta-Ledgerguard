@@ -36,7 +36,8 @@ describe('early-tester inventory demo', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(core, 'executeConstrainedRemediation').mockResolvedValue({
       committed: false, steps: [], verification: null,
-      failureReason: 'VERIFICATION_FAILED', failureDetail: 'Injected verification failure'
+      failureReason: 'VERIFICATION_FAILED', failureDetail: 'Injected verification failure',
+      sourceStateFingerprint: '0'.repeat(64)
     });
     await expect(runInventoryDemo()).rejects.toThrow(/repair must commit/);
   });
