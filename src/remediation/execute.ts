@@ -245,11 +245,11 @@ export async function executeRemediationPlan(
           receipt,
           now: now()
         });
-        currentRecord = await applyRemediationPlanTransition(client, input.planId, currentRecord.version, {
+        const verifying = await applyRemediationPlanTransition(client, input.planId, currentRecord.version, {
           state: 'VERIFYING',
           updatedAt: now().toISOString()
         });
-        currentRecord = await applyRemediationPlanTransition(client, input.planId, currentRecord.version, {
+        const resolved = await applyRemediationPlanTransition(client, input.planId, verifying.version, {
           state: 'RESOLVED',
           updatedAt: now().toISOString(),
           executionResultJson: JSON.stringify({
@@ -267,11 +267,12 @@ export async function executeRemediationPlan(
             result: (verified as { verification?: unknown }).verification
           })
         });
-        completedInTransaction = true;
-        inTransactionReceipt = receipt;
         if (deps.afterIntegrityBookkeeping) {
           await deps.afterIntegrityBookkeeping(client);
         }
+        currentRecord = resolved;
+        completedInTransaction = true;
+        inTransactionReceipt = receipt;
       }
     });
 
