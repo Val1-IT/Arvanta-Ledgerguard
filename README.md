@@ -43,7 +43,7 @@ LedgerGuard separates **probabilistic reasoning** from **deterministic execution
 Optional: @ledgerguard/datahub  (catalog context only — not authority)
 ```
 
-Status: **v0.2.0**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
+Status: **v0.3.0 (proposed)**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. **Odoo support: experimental adapter — one constrained inventory action; not a general ERP product.** Not a production authentication or ERP platform.
 
 License: [Apache-2.0](LICENSE)
 
@@ -176,7 +176,7 @@ See [docs/architecture/execution-integrity.md](docs/architecture/execution-integ
 - **Demo authority.** The demo mints `incident-ui` with full capabilities in server code. There is no production authentication.
 - **Not exactly-once.** PostgreSQL same-database atomicity closes the post-COMMIT reserved-key window. Other adapters and ambiguous expired reservations are not exactly-once.
 - **Detector precedence.** Conversion mismatch wins if both incidents exist. Simultaneous root causes are not aggregated.
-- **Adapter scope.** PostgreSQL is the execution adapter. Odoo / ERPNext / REST are future work.
+- **Adapter scope.** PostgreSQL remains the transactional reference adapter. Odoo 19 support is experimental: one `stock.quant` inventory adjustment via JSON-2. See [docs/integrations/odoo.md](docs/integrations/odoo.md).
 
 ## Development
 

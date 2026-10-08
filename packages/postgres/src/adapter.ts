@@ -35,7 +35,13 @@ export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
   readonly meta: {
     systemId: string;
     systemType: 'postgres';
-    capabilities: { nativeTransactions: true; idempotencyInNativeTransaction: true };
+    capabilities: {
+      nativeTransactions: true;
+      idempotencyInNativeTransaction: true;
+      supportsStateVersioning: false;
+      supportsSimulation: false;
+      supportsCompensation: false;
+    };
   };
   private readonly cogsAccountCode: string;
   private readonly beforeCommit?: (client: Queryable, result: unknown) => Promise<void>;
@@ -49,7 +55,13 @@ export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
     this.meta = {
       systemId: options.systemId ?? 'postgres-inventory-ledger',
       systemType: 'postgres',
-      capabilities: { nativeTransactions: true, idempotencyInNativeTransaction: true }
+      capabilities: {
+        nativeTransactions: true,
+        idempotencyInNativeTransaction: true,
+        supportsStateVersioning: false,
+        supportsSimulation: false,
+        supportsCompensation: false
+      }
     };
   }
 

@@ -35,6 +35,8 @@ On PostgreSQL, `beforeCommit` writes the idempotency completion, execution journ
 
 Adapters without `idempotencyInNativeTransaction` still persist `VERIFYING` on a separate connection. Recovery remains the protocol for those leftovers. This is not exactly-once delivery.
 
+Odoo 19 (`@ledgerguard/odoo`) is experimental: one `stock.quant` inventory adjustment over JSON-2. It declares `nativeTransactions: false` and never treats HTTP 200 as verified success.
+
 ## What v0.2 changes
 
 - **Source-state fingerprint.** SHA-256 of the approved correction set. Stored on the receipt so later audit can see what was authorized.

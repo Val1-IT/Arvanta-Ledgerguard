@@ -1,6 +1,6 @@
 {
   "name": "@ledgerguard/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Deterministic investigation, evidence, findings, side effects, verification, and execution contracts.",
   "license": "Apache-2.0",
   "repository": {

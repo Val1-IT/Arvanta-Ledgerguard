@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
-  name: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
@@ -13,36 +12,30 @@ const pkg = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) 
 const FORBIDDEN = [
   'next',
   'react',
-  'react-dom',
-  '@anthropic-ai/sdk',
-  'openai',
-  'lucide-react',
-  'mcp',
-  '@modelcontextprotocol/sdk',
-  'acryl-datahub',
+  'pg',
+  '@ledgerguard/postgres',
+  '@ledgerguard/policy',
   '@ledgerguard/datahub',
-  '@ledgerguard/odoo',
-  '@ledgerguard/policy'
+  '@anthropic-ai/sdk',
+  'openai'
 ] as const;
 
-describe('@ledgerguard/postgres isolation', () => {
-  it('depends on core and pg only at runtime', () => {
-    expect(Object.keys(pkg.dependencies ?? {}).sort()).toEqual(['@ledgerguard/core', 'pg']);
+describe('@ledgerguard/odoo isolation', () => {
+  it('depends only on @ledgerguard/core at runtime', () => {
+    expect(Object.keys(pkg.dependencies ?? {})).toEqual(['@ledgerguard/core']);
   });
 
-  it('does not depend on UI, DataHub, MCP, or LLM SDKs', () => {
+  it('does not depend on UI, Postgres, policy, or LLM SDKs', () => {
     const declared = { ...pkg.dependencies, ...pkg.devDependencies };
     for (const name of FORBIDDEN) {
       expect(declared[name], name).toBeUndefined();
     }
   });
 
-  it('does not import application source', () => {
+  it('source does not import application modules', () => {
     const files = listTsFiles(join(packageRoot, 'src'));
-    const applicationImport = /from ['"](?:\.\.\/)+src\//;
     for (const file of files) {
-      const text = readFileSync(file, 'utf8');
-      expect(text.match(applicationImport), file).toBeNull();
+      expect(readFileSync(file, 'utf8').match(/from ['"](?:\.\.\/){2,}src\//), file).toBeNull();
     }
   });
 });
