@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -118,7 +118,7 @@ describe('isolated deployment validation guards', () => {
     expect(result.status).toBe(0);
     const inventory = JSON.parse(result.stdout);
     expect(inventory.packages).toEqual([{ name: 'braces', version: '3.0.3' }]);
-    expect(inventory.environmentFiles).toEqual([join(root, '.env.local')]);
+    expect(inventory.environmentFiles).toEqual([realpathSync(join(root, '.env.local'))]);
   });
 
   it('fails cleanup closed on Docker list/removal failures', () => {
