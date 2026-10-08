@@ -29,6 +29,8 @@ These statuses appear on the structured `ExecutionReceipt`. The demo plan row us
 
 Reserved-key recovery runs **before** fresh execution policy and **before** `APPROVED → EXECUTING`. An in-flight leftover is not treated as a new execution attempt.
 
+See [execution key state diagrams](execution-key-states.md) for key transitions and lease-expiry recovery.
+
 ## PostgreSQL atomicity vs other adapters
 
 On PostgreSQL, `beforeCommit` writes the idempotency completion, execution journal, and `VERIFYING`/`RESOLVED` plan transitions on the **same client** as the verified mutations. `onWritesApplied` is not used for the default Postgres adapter.
