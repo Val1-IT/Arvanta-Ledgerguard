@@ -13,6 +13,7 @@ import {
 } from './catalog';
 import type { InvestigationModel } from './model';
 import { reconcile } from './reconciliation';
+import { formatSafeError } from './safe-errors';
 import {
   InvestigationAgentInputSchema,
   type ActivityLogEntry,
@@ -145,11 +146,10 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
 
   async function fail(
     failureState: FailureState,
-    message: string,
     options: { output?: InvestigationOutput | null } = {}
   ): Promise<InvestigationRunRecord> {
     transition(failureState);
-    const error: ErrorState = { failureState, message, occurredAt: now().toISOString() };
+    const error: ErrorState = { failureState, message: formatSafeError(failureState), occurredAt: now().toISOString() };
     const record: InvestigationRunRecord = {
       investigationId,
       incidentId: input.incidentId,
@@ -180,8 +180,8 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
       { input: { incidentId: input.incidentId, productId: input.productId } }
     );
     transition('ENGINE_ANALYSIS_COMPLETED');
-  } catch (err) {
-    return fail('ENGINE_FAILED', err instanceof Error ? err.message : String(err));
+  } catch {
+    return fail('ENGINE_FAILED');
   }
 
   // -------------------------------------------------------------------
@@ -222,14 +222,13 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
   try {
     transition('MODEL_ANALYSIS_STARTED');
     modelOutput = await logger.record('model.generateInvestigation', () => deps.model.generateInvestigation(facts));
-  } catch (err) {
-    return fail('MODEL_OUTPUT_INVALID', err instanceof Error ? err.message : String(err));
+  } catch {
+    return fail('MODEL_OUTPUT_INVALID');
   }
 
   const reconciliation = reconcile(modelOutput, engineResult, datahubContext);
   if (!reconciliation.passed) {
-    const failing = reconciliation.checks.filter((c) => !c.passed).map((c) => `${c.rule}: ${c.detail}`);
-    return fail('MODEL_OUTPUT_INVALID', `Reconciliation failed: ${failing.join(' | ')}`);
+    return fail('MODEL_OUTPUT_INVALID');
   }
 
   const engineResultReference = buildEngineResultReference(engineResult);
@@ -245,11 +244,7 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
       provenance,
       logger.finalize()
     );
-    return fail(
-      'EVIDENCE_INSUFFICIENT',
-      `Model judged evidence insufficient: ${modelOutput.evidenceSufficiency.missingEvidence.join(', ') || 'no detail provided'}`,
-      { output }
-    );
+    return fail('EVIDENCE_INSUFFICIENT', { output });
   }
 
   transition('MODEL_ANALYSIS_VALIDATED');
@@ -267,7 +262,7 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
         throw new Error('Live DataHub MCP write-back is required in judge mode; SDK fallback is not accepted.');
       }
       logger.ingest(writeback.activityLog);
-    } catch (err) {
+    } catch {
       const output = buildOutput(
         investigationId,
         input,
@@ -278,7 +273,7 @@ export async function runInvestigation(rawInput: unknown, deps: OrchestratorDeps
         provenance,
         logger.finalize()
       );
-      return fail('WRITEBACK_FAILED', err instanceof Error ? err.message : String(err), { output });
+      return fail('WRITEBACK_FAILED', { output });
     }
   }
 

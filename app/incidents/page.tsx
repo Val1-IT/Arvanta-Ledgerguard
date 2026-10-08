@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getServerPool } from '../../src/agent/server-pool';
+import { formatSafeError } from '../../src/agent/safe-errors';
 import { CopyIdButton } from '../../src/ui/components/copy-id-button';
 import { EmptyState } from '../../src/ui/components/empty-state';
 import { ErrorState } from '../../src/ui/components/error-state';
@@ -70,12 +71,11 @@ export default async function IncidentsPage() {
         </Panel>
       </div>
     );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to load incidents';
+  } catch {
     return (
       <div className="space-y-6">
         <PageHeader title="Incidents" />
-        <ErrorState title="Incidents unavailable" message={message} />
+        <ErrorState title="Incidents unavailable" message={formatSafeError('BACKEND_UNAVAILABLE')} />
       </div>
     );
   }

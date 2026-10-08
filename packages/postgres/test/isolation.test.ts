@@ -21,6 +21,7 @@ const FORBIDDEN = [
   '@modelcontextprotocol/sdk',
   'acryl-datahub',
   '@ledgerguard/datahub',
+  '@ledgerguard/odoo',
   '@ledgerguard/policy'
 ] as const;
 

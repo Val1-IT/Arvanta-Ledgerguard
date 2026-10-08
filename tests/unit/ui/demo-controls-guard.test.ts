@@ -13,6 +13,12 @@ describe('demo controls guards', () => {
     expect(source).toContain("setPendingAction('simulate')");
   });
 
+  it('preserves redirect suppression but never displays arbitrary transport diagnostics', () => {
+    expect(source).toContain("if (!message.includes('NEXT_REDIRECT'))");
+    expect(source).not.toContain('setError(message)');
+    expect(source).toContain("setError(formatSafeError('DEMO_ACTION_FAILED'))");
+  });
+
   it('does not mark simulate success before backend redirect', () => {
     expect(source).not.toContain('Simulate succeeded');
     expect(actions).toContain('redirect(`/incidents/${record.investigationId}`)');

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getServerPool } from '../../../src/agent/server-pool';
+import { formatSafeError } from '../../../src/agent/safe-errors';
 import {
   createRemediationPlan,
   decideRemediationPlan,
@@ -18,7 +19,7 @@ import {
   type ApprovalAction
 } from '../../../src/remediation/types';
 import { writebackRemediationResolution } from '../../../src/remediation/writeback';
-import { assertDemoMode } from '../../../src/ui/lib/demo-mode';
+import { assertDemoMode, isDemoModeEnabled } from '../../../src/ui/lib/demo-mode';
 
 export type RemediationActionResult =
   | { ok: true; planId: string; state: string; version: number; message?: string }
@@ -26,32 +27,32 @@ export type RemediationActionResult =
 
 function mapError(error: unknown): RemediationActionResult {
   if (error instanceof NoRemediableIncidentError) {
-    return { ok: false, error: error.message, code: 'NO_REMEDIABLE_INCIDENT' };
+    return { ok: false, error: formatSafeError('NO_REMEDIABLE_INCIDENT'), code: 'NO_REMEDIABLE_INCIDENT' };
   }
   if (error instanceof OptimisticConcurrencyError) {
     return {
       ok: false,
-      error: 'This plan changed while you were working. Refresh the page and try again with the latest version.',
+      error: formatSafeError('OPTIMISTIC_CONCURRENCY'),
       code: 'OPTIMISTIC_CONCURRENCY'
     };
   }
   if (error instanceof InvalidTransitionError) {
     return {
       ok: false,
-      error: `Invalid transition from ${error.from} to ${error.to}. Refresh to see the current plan state.`,
+      error: formatSafeError('INVALID_TRANSITION'),
       code: 'INVALID_TRANSITION'
     };
   }
   if (error instanceof RemediationPlanNotFoundError) {
-    return { ok: false, error: `Remediation plan not found: ${error.planId}`, code: 'NOT_FOUND' };
+    return { ok: false, error: formatSafeError('REMEDIATION_PLAN_NOT_FOUND'), code: 'NOT_FOUND' };
   }
   if (error instanceof PolicyDeniedError) {
-    return { ok: false, error: error.message, code: 'POLICY_DENIED' };
+    return { ok: false, error: formatSafeError('POLICY_DENIED'), code: 'POLICY_DENIED' };
   }
   if (error instanceof ApprovalRequiredError) {
-    return { ok: false, error: error.message, code: 'APPROVAL_REQUIRED' };
+    return { ok: false, error: formatSafeError('APPROVAL_REQUIRED'), code: 'APPROVAL_REQUIRED' };
   }
-  const message = error instanceof Error ? error.message : 'Remediation action failed';
+  const message = formatSafeError(isDemoModeEnabled() ? 'REMEDIATION_ACTION_FAILED' : 'DEMO_MODE_DISABLED');
   return { ok: false, error: message, code: 'UNKNOWN' };
 }
 
@@ -240,9 +241,7 @@ export async function writebackRemediationResolutionAction(input: {
     }
     return {
       ok: false,
-      error:
-        plan.datahubWriteback?.message ??
-        'DataHub write-back failed; ERP remediation remains RESOLVED.',
+      error: formatSafeError(outcome === 'NOT_CONFIGURED' ? 'DATAHUB_NOT_CONFIGURED' : 'REMEDIATION_WRITEBACK_FAILED'),
       code: 'WRITEBACK_FAILED'
     };
   } catch (error) {

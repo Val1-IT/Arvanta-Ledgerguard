@@ -1,4 +1,4 @@
-# Execution integrity (v0.2)
+# Execution integrity (v0.3 experimental adapters)
 
 LedgerGuard is a deterministic execution integrity runtime for AI agents operating on systems of record.
 
@@ -25,7 +25,7 @@ Failure / recovery statuses:
 
 `DENIED | STALE | VERIFICATION_FAILED | ROLLED_BACK | RECOVERY_REQUIRED | FAILED | ALREADY_EXECUTED`
 
-These statuses appear on the structured `ExecutionReceipt`. The demo plan row uses `APPROVED` → `EXECUTING` → `VERIFYING` → `RESOLVED`. Crash recovery may use recovery-only transitions `EXECUTING|VERIFYING → RESOLVED` (applied) or `→ INTERRUPTED` (not applied). `INTERRUPTED → EXECUTING` resumes the original approval; it is not a new approval.
+These statuses appear on the structured `ExecutionReceipt`. The demo plan row uses `APPROVED` → `EXECUTING` → `VERIFYING` → `RESOLVED`. Native PostgreSQL crash recovery may use recovery-only transitions `EXECUTING|VERIFYING → RESOLVED` (applied) or `→ INTERRUPTED` (not applied). `INTERRUPTED → EXECUTING` resumes the original approval; it is not a new approval.
 
 Reserved-key recovery runs **before** fresh execution policy and **before** `APPROVED → EXECUTING`. An in-flight leftover is not treated as a new execution attempt.
 
@@ -34,6 +34,8 @@ Reserved-key recovery runs **before** fresh execution policy and **before** `APP
 On PostgreSQL, `beforeCommit` writes the idempotency completion, execution journal, and `VERIFYING`/`RESOLVED` plan transitions on the **same client** as the verified mutations. `onWritesApplied` is not used for the default Postgres adapter.
 
 Adapters without `idempotencyInNativeTransaction` still persist `VERIFYING` on a separate connection. Recovery remains the protocol for those leftovers. This is not exactly-once delivery.
+
+Odoo 19 (`@ledgerguard/odoo`) is experimental: one `stock.quant` inventory adjustment over JSON-2. It declares `nativeTransactions: false` and never treats HTTP 200 as verified success.
 
 ## What v0.2 changes
 
@@ -49,9 +51,40 @@ Adapters without `idempotencyInNativeTransaction` still persist `VERIFYING` on a
 ## What v0.2 does not claim
 
 - Exactly-once delivery.
-- Crash recovery for adapters without native transactions.
+- A distributed transaction across the control plane and remote adapters.
 - Durable in-process audit logs (`createMemoryAuditLog` is still request-scoped).
-- Odoo / ERPNext adapters.
+- General-purpose Odoo or ERPNext mutation support.
 - Production authentication.
 
 See [authority-model.md](authority-model.md) and [threat-model.md](../threat-model.md).
+
+## Remote approval snapshot and conditional Odoo operation
+
+A remote plan persists `remoteActionBinding` at draft creation. It binds exact
+action JSON, trusted system ID/type, and fingerprint; the normal human approval
+transition approves that persisted snapshot. Execution and replay validate the
+binding before reading keys or contacting the adapter. Changing intent requires
+a new draft. Existing approved remote rows without a binding fail closed.
+
+A post-write remote verification failure remains `VERIFYING` with
+`RECOVERY_REQUIRED`; it is not a SQL rollback. Valid execution and verification
+records remain loadable after persistence, including failed/uncertain outcomes.
+
+The optional Odoo addon performs its conditional action, verification and receipt
+write inside one Odoo transaction. `nativeTransactions` and
+`idempotencyInNativeTransaction` stay false for the cross-system control plane;
+narrow addon capabilities describe only that remote conditional operation.
+See [Odoo scope and limits](../integrations/odoo.md).
+
+## Preserved evidence and conservative remote retries
+
+Recovered receipts and journal rows identify the original execution-key owner
+version and approved source fingerprint. The live plan version is used only for
+optimistic state transitions. Receipt fields survive the plan schema parser and
+reload, so operators can inspect the same execution identity after recovery.
+
+For remote actions, a lease deadline is not a cancellation acknowledgement.
+Even a current `not_applied` observation cannot prove the old request will never
+arrive. The control plane therefore keeps the reservation and reports
+`RECOVERY_REQUIRED`; it does not automatically release a key or start another
+remote attempt. This intentionally differs from native transactional recovery.

@@ -7,9 +7,9 @@ import {
   type SystemOfRecordAdapter,
   type SystemOfRecordSession
 } from '@ledgerguard/core';
-import { PostgresExecutionKeyStore, type Queryable } from '@ledgerguard/postgres';
+import { ExecutionKeyConflictError, PostgresExecutionKeyStore, type Queryable } from '@ledgerguard/postgres';
 import { ConcurrentExecutionError } from '@ledgerguard/policy';
-import { executeRemediationPlan } from '../../../src/remediation/execute';
+import { executeRemediationPlan, type ExecuteRemediationPlanInput } from '../../../src/remediation/execute';
 import { testHarnessAuthority } from '../../../src/remediation/trusted-authority';
 import type { RemediationPlanRecord } from '../../../src/remediation/types';
 import { duplicateIncidentInput } from '../../../packages/core/test/duplicate-fixtures';
@@ -96,7 +96,7 @@ function createPlanPool(initial: RemediationPlanRecord) {
     query: async (sql: string, params?: unknown[]) => {
       if (sql.includes('update remediation_plans')) {
         const expectedVersion = Number(params?.[1]);
-        if (plan.version !== expectedVersion) {
+        if (plan.id !== params?.[0] || plan.version !== expectedVersion) {
           return { rows: [], rowCount: 0 };
         }
         plan = {
@@ -212,6 +212,48 @@ async function reservedStore(expired: boolean) {
 }
 
 describe('crash-window execution recovery', () => {
+  it.each(['planId', 'expectedVersion', 'idempotencyKey'] as const)(
+    'snapshots caller-owned %s before loading the plan', async (field) => {
+      const { pool } = createPlanPool(planRecord('APPROVED', 2));
+      const input: ExecuteRemediationPlanInput = { planId: 'plan-dup-1', expectedVersion: 2, idempotencyKey: KEY };
+      const query = pool.query.bind(pool);
+      pool.query = (async (...args: unknown[]) => {
+        if (String(args[0]).includes('from remediation_plans')) {
+          if (field === 'planId') input.planId = 'different-plan';
+          if (field === 'expectedVersion') input.expectedVersion = 99;
+          if (field === 'idempotencyKey') input.idempotencyKey = 'different-key';
+        }
+        return (query as (...args: unknown[]) => unknown)(...args);
+      }) as Pool['query'];
+      const db = new MemoryKeys();
+      const keys = new PostgresExecutionKeyStore(db as unknown as Queryable);
+      const { adapter, mutationCount } = trackingAdapter(repairedSnapshot());
+      const result = await executeRemediationPlan(input,
+        { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW });
+      expect(result.outcome).toBe('FAILED');
+      expect(result.receipt).toMatchObject({ planId: 'plan-dup-1', planVersion: 2, idempotencyKey: KEY });
+      expect(result.plan.executionResult?.failureReason).toBe('DRIFT_DETECTED');
+      expect(db.rows.get(KEY)?.planVersion).toBe(2);
+      expect(mutationCount()).toBe(0);
+    }
+  );
+
+  it('keeps the reserved plan version after a caller changes its request during adapter I/O', async () => {
+    const { pool } = createPlanPool(planRecord('APPROVED', 2));
+    const input = { planId: 'plan-dup-1', expectedVersion: 2, idempotencyKey: KEY };
+    const db = new MemoryKeys();
+    const keys = new PostgresExecutionKeyStore(db as unknown as Queryable);
+    const { adapter } = trackingAdapter(repairedSnapshot());
+    const run = adapter.runInTransaction.bind(adapter);
+    adapter.runInTransaction = async (work) => {
+      input.expectedVersion = 99;
+      return run(work);
+    };
+    const result = await executeRemediationPlan(input,
+      { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW });
+    expect(result.receipt?.planVersion).toBe(2);
+  });
+
   it('APPROVED leftover reserved key recovers without requiring another approval cycle', async () => {
     const { pool, current } = createPlanPool(planRecord('APPROVED', 2));
     const { keys } = await reservedStore(true);
@@ -241,6 +283,9 @@ describe('crash-window execution recovery', () => {
     expect(result.plan.state).toBe('RESOLVED');
     expect(result.receipt?.recovered).toBe(true);
     expect(result.receipt?.recoveryClassification).toBe('applied');
+    expect(result.receipt?.planVersion).toBe(2);
+    expect(result.plan.executionResult?.receipt).toEqual(result.receipt);
+    expect((db.journal[0] as unknown[])[3]).toBe(2);
     expect(mutationCount()).toBe(0);
     expect(db.rows.get(KEY)?.state).toBe('completed');
     expect(db.journal.length).toBeGreaterThan(0);
@@ -251,6 +296,20 @@ describe('crash-window execution recovery', () => {
       { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW }
     );
     expect(replay.outcome).toBe('ALREADY_EXECUTED');
+    expect(mutationCount()).toBe(0);
+  });
+
+  it('rejects a foreign completed key before reconciling the plan', async () => {
+    const { pool } = createPlanPool(planRecord('APPROVED', 2));
+    const { db, keys } = await reservedStore(true);
+    const row = db.rows.get(KEY)!;
+    row.planId = 'another-plan';
+    row.state = 'completed';
+    const { adapter, mutationCount } = trackingAdapter(repairedSnapshot());
+    await expect(executeRemediationPlan(
+      { planId: 'plan-dup-1', expectedVersion: 2, idempotencyKey: KEY },
+      { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW }
+    )).rejects.toBeInstanceOf(ExecutionKeyConflictError);
     expect(mutationCount()).toBe(0);
   });
 
@@ -301,11 +360,13 @@ describe('crash-window execution recovery', () => {
     );
     expect(recovered.outcome).toBe('INTERRUPTED');
     expect(recovered.plan.state).toBe('INTERRUPTED');
+    expect(recovered.receipt?.planVersion).toBe(2);
+    expect(recovered.plan.executionResult?.receipt).toEqual(recovered.receipt);
     expect(db.rows.get(KEY)?.state).toBe('failed_retryable');
     expect(mutations).toBe(0);
 
     const resumed = await executeRemediationPlan(
-      { planId: 'plan-dup-1', expectedVersion: current().version, idempotencyKey: KEY },
+      { planId: 'plan-dup-1', expectedVersion: current().version },
       { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW }
     );
     expect(resumed.outcome).toBe('EXECUTED');
@@ -357,6 +418,9 @@ describe('crash-window execution recovery', () => {
     expect(result.outcome).toBe('ALREADY_EXECUTED');
     expect(current().state).toBe('RESOLVED');
     expect(db.rows.get(KEY)?.state).toBe('completed');
+    expect(result.receipt?.planVersion).toBe(2);
+    expect(result.plan.executionResult?.receipt).toEqual(result.receipt);
+    expect((db.journal[0] as unknown[])[3]).toBe(2);
     expect(mutationCount()).toBe(0);
   });
 

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { loadInvestigationRun } from '../../../../src/db/repositories/investigation-runs';
 import { getServerPool } from '../../../../src/agent/server-pool';
 import type { ActivityLogEntry } from '../../../../src/agent/types';
+import { formatSafeError } from '../../../../src/agent/safe-errors';
 import { labelModelSource } from '../../../../src/ui/lib/status-labels';
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ function ActivityLogTable({ entries }: { entries: ActivityLogEntry[] }) {
               <td className="py-2 pr-3 font-mono">{entry.durationMs}ms</td>
               <td className="max-w-xs break-words py-2 pr-3 font-mono text-xs text-ink-muted">{entry.inputSummary}</td>
               <td className="max-w-xs break-words py-2 pr-3 font-mono text-xs text-ink-muted">
-                {entry.status === 'OK' ? entry.outputSummary : entry.errorSanitized}
+                {entry.status === 'OK' ? entry.outputSummary : formatSafeError('TOOL_FAILED')}
               </td>
             </tr>
           ))}
@@ -124,7 +125,7 @@ export default async function InvestigationRunPage({ params }: { params: Promise
       {record.error && (
         <div className="lg-panel space-y-2 border-risk p-6">
           <h2 className="font-bold text-risk">Failure: {record.error.failureState}</h2>
-          <p className="text-sm text-ink-muted">{record.error.message}</p>
+          <p className="text-sm text-ink-muted">{formatSafeError(record.error.failureState)}</p>
           <p className="text-xs text-ink-muted">Occurred at {record.error.occurredAt}</p>
         </div>
       )}

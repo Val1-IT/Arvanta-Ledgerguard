@@ -10,7 +10,14 @@ export function getDatabaseUrl(): string {
 }
 
 export function makePool(url: string = getDatabaseUrl()): Pool {
-  return new Pool({ connectionString: url });
+  const pool = new Pool({ connectionString: url });
+  // Idle clients can fail during a database restart. A listener prevents an
+  // unhandled EventEmitter error from terminating the app; pg removes the failed
+  // client and reconnects for later requests. Never log raw connection details.
+  pool.on('error', () => {
+    console.error('A background database connection failed; the pool will reconnect on demand.');
+  });
+  return pool;
 }
 
 export function makeDb(pool: Pool) {

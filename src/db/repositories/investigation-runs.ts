@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { InvestigationRunRecordSchema, type InvestigationRunRecord } from '../../agent/types';
+import { sanitizeInvestigationErrors } from '../../agent/safe-errors';
 
 // ---------------------------------------------------------------------------
 // Persistence for FASE 5 investigation runs (src/agent/orchestrator.ts). One
@@ -9,7 +10,8 @@ import { InvestigationRunRecordSchema, type InvestigationRunRecord } from '../..
 // field exists on that type, so none is ever persisted here.
 // ---------------------------------------------------------------------------
 
-export async function saveInvestigationRun(pool: Pool, record: InvestigationRunRecord): Promise<void> {
+export async function saveInvestigationRun(pool: Pool, rawRecord: InvestigationRunRecord): Promise<void> {
+  const record = sanitizeInvestigationErrors(rawRecord);
   await pool.query(
     `insert into investigation_runs
        (id, incident_id, product_id, trigger_asset, requested_by, mode, final_state, status,
@@ -50,7 +52,9 @@ export async function loadInvestigationRun(pool: Pool, investigationId: string):
   );
   if (rows.length === 0) return null;
   const row = rows[0];
-  return InvestigationRunRecordSchema.parse({
+  // Legacy rows may predate diagnostic redaction. Protect every read consumer
+  // without silently rewriting historical database records.
+  return sanitizeInvestigationErrors(InvestigationRunRecordSchema.parse({
     investigationId: row.investigationId,
     incidentId: row.incidentId,
     input: JSON.parse(row.inputJson),
@@ -59,5 +63,5 @@ export async function loadInvestigationRun(pool: Pool, investigationId: string):
     error: row.errorJson ? JSON.parse(row.errorJson) : null,
     stateHistory: JSON.parse(row.stateHistoryJson),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt
-  });
+  }));
 }

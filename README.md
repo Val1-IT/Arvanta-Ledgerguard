@@ -2,7 +2,9 @@
 
 **A deterministic execution integrity runtime for AI agents operating on systems of record.**
 
-AI agents may inspect ledgers, correlate evidence, and propose repairs.
+Executable repairs come from deterministic detectors and constrained adapters; model output never grants mutation authority.
+
+AI agents may inspect ledgers, correlate evidence, and suggest investigations.
 They must not receive mutation authority merely because an LLM generated a tool call.
 
 LedgerGuard separates **probabilistic reasoning** from **deterministic execution authority**. An approved mutation is not successful until postconditions are verified against the system of record.
@@ -43,13 +45,13 @@ LedgerGuard separates **probabilistic reasoning** from **deterministic execution
 Optional: @ledgerguard/datahub  (catalog context only — not authority)
 ```
 
-Status: **v0.2.0**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. Not a production authentication or ERP platform.
+Status: **v0.3.0 (proposed)**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. **Odoo support: experimental adapter — one constrained inventory action; not a general ERP product.** Not a production authentication or ERP platform.
 
 License: [Apache-2.0](LICENSE)
 
 ## Quickstart: one-command local demo
 
-Requires **Node.js 20+** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
+Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
@@ -69,7 +71,11 @@ Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
 
 This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use the PostgreSQL path below to exercise those.
 
-**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.md) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
+**Integrating an existing service?** Start with the [adoption tutorial](docs/integrations/adoption-tutorial.md) for adapter boundaries, persisted approval, outcomes, and runnable reference tests.
+
+**Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
+
+**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 
 ### Manual fallback: same in-memory demo
 
@@ -176,7 +182,7 @@ See [docs/architecture/execution-integrity.md](docs/architecture/execution-integ
 - **Demo authority.** The demo mints `incident-ui` with full capabilities in server code. There is no production authentication.
 - **Not exactly-once.** PostgreSQL same-database atomicity closes the post-COMMIT reserved-key window. Other adapters and ambiguous expired reservations are not exactly-once.
 - **Detector precedence.** Conversion mismatch wins if both incidents exist. Simultaneous root causes are not aggregated.
-- **Adapter scope.** PostgreSQL is the execution adapter. Odoo / ERPNext / REST are future work.
+- **Adapter scope.** PostgreSQL remains the transactional reference adapter. Odoo 19 support is experimental: one `stock.quant` inventory adjustment via JSON-2. See [docs/integrations/odoo.md](docs/integrations/odoo.md).
 
 ## Development
 
@@ -186,8 +192,25 @@ pnpm verify:integration     # migrate + Postgres integration tests
 pnpm test:datahub           # optional; needs live DataHub
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## History
 
 LedgerGuard began as a DataHub Agent Hackathon prototype. The OSS runtime extracts the deterministic engine, policy, and PostgreSQL adapter so DataHub is one optional integration rather than the product.
+
+Hackathon-era submission and deployment drafts are preserved in [the historical archive](docs/archive/hackathon/). Current evaluation instructions are in the guides above.
+
+
+## Deployment gate
+
+The shipped web UI is a **private synthetic-data evaluation app**, not a
+production identity or ERP access boundary. Compose now binds published ports to
+loopback, copied example configuration disables mutation/provider actions by
+default, and `/api/health/ready` checks connectivity plus required migrations and
+schema instead of treating a fallback HTML page as healthy.
+
+See [isolated deployment validation](docs/testing/deployment-validation.md) for
+the exact build/start/restart/rollback proof and its limits. `DEMO_MODE=true` is an
+explicit demo opt-in, not authentication. Do not expose the UI publicly or use
+real ERP/customer data without a separately reviewed identity, authorization,
+ingress, backup and migration plan.

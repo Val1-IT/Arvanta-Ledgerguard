@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { formatSafeError } from '../agent/safe-errors';
 import { DataHubBridgeError, isDataHubConfigured } from '@ledgerguard/datahub';
 import { createDataHubStatusPublisher, type InvestigationStatusPublisher } from '../agent/catalog';
 import { getRuntimePolicy } from '../runtime/runtime-policy';
@@ -84,7 +85,7 @@ export async function writebackRemediationResolution(
       outcome: 'NOT_CONFIGURED',
       atRiskTagRemoved: false,
       trustedTagAdded: false,
-      message: 'DataHub is not configured; system-of-record verification is unchanged.'
+      message: formatSafeError('DATAHUB_NOT_CONFIGURED')
     };
   } else {
     try {
@@ -103,13 +104,13 @@ export async function writebackRemediationResolution(
         trustedTagAdded: resolution.trustedTagAdded,
         message: null
       };
-    } catch (error) {
+    } catch {
       writebackResult = {
         attemptedAt,
         outcome: 'FAILED',
         atRiskTagRemoved: false,
         trustedTagAdded: false,
-        message: error instanceof Error ? error.message : String(error)
+        message: formatSafeError('REMEDIATION_WRITEBACK_FAILED')
       };
     }
   }

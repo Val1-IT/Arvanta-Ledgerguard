@@ -3,6 +3,8 @@ import {
   ProposedCorrectionSchema,
   VerificationExpectationSchema,
   VerificationResultSchema,
+  EXECUTION_RECEIPT_SCHEMA_VERSION,
+  ExecutionStatus,
   type ExecutionReceipt
 } from '@ledgerguard/core';
 
@@ -126,13 +128,38 @@ export const RemediationExecutionOutcomeSchema = z.enum([
 ]);
 export type RemediationExecutionOutcome = z.infer<typeof RemediationExecutionOutcomeSchema>;
 
+// Old plans may omit receipts; when evidence is present it must survive reload
+// and conform to the core receipt contract rather than pass through unchecked.
+const ExecutionReceiptSchema: z.ZodType<ExecutionReceipt> = z.object({
+  schemaVersion: z.literal(EXECUTION_RECEIPT_SCHEMA_VERSION),
+  executionId: z.string().min(1),
+  planId: z.string().min(1),
+  planVersion: z.number().int().positive(),
+  idempotencyKey: z.string().min(1),
+  status: z.nativeEnum(ExecutionStatus),
+  sourceStateFingerprint: z.string(),
+  adapter: z.object({
+    systemId: z.string().min(1),
+    systemType: z.string().min(1),
+    nativeTransactions: z.boolean(),
+    idempotencyInNativeTransaction: z.boolean()
+  }),
+  verificationOverallStatus: z.enum(['PASS', 'FAIL']).nullable(),
+  committed: z.boolean(),
+  recovered: z.boolean(),
+  recoveryClassification: z.enum(['applied', 'not_applied', 'ambiguous']).nullable(),
+  occurredAt: z.string().datetime({ offset: true })
+});
+
 export const RemediationExecutionResultSchema = z.object({
   startedAt: z.string(),
   finishedAt: z.string(),
   steps: z.array(ExecutionStepResultSchema),
   failureReason: ExecutionFailureReasonSchema.nullable(),
   failureDetail: z.string().nullable(),
-  outcome: RemediationExecutionOutcomeSchema.optional()
+  outcome: RemediationExecutionOutcomeSchema.optional(),
+  receipt: ExecutionReceiptSchema.optional(),
+  fingerprintAfter: z.string().nullable().optional()
 });
 export type RemediationExecutionResult = z.infer<typeof RemediationExecutionResultSchema>;
 
@@ -179,6 +206,14 @@ export type RemediationWritebackResult = z.infer<typeof RemediationWritebackResu
 // investigation_runs' own denormalization pattern.
 // ---------------------------------------------------------------------------
 
+export const RemoteActionBindingSchema = z.object({
+  systemId: z.string().min(1),
+  systemType: z.string().min(1),
+  actionJson: z.string().min(1),
+  expectedFingerprint: z.string().min(1)
+});
+export type RemoteActionBinding = z.infer<typeof RemoteActionBindingSchema>;
+
 export const RemediationPlanRecordSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   id: z.string(),
@@ -193,6 +228,7 @@ export const RemediationPlanRecordSchema = z.object({
 
   // Snapshot taken at plan-creation time, never re-derived implicitly later —
   // execution re-runs investigate() fresh and compares against exactly this.
+  remoteActionBinding: RemoteActionBindingSchema.nullish(),
   proposedCorrections: z.array(ProposedCorrectionSchema),
   verificationExpectations: z.array(VerificationExpectationSchema),
 

@@ -1,6 +1,6 @@
 {
   "name": "@ledgerguard/postgres",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Constrained PostgreSQL system-of-record adapter and transactional execution.",
   "license": "Apache-2.0",
   "repository": {
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@types/pg": "^8.11.10",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"

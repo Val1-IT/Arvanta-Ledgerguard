@@ -1,8 +1,11 @@
 import type { Queryable } from '../queryable';
+import { sanitizeRemediationErrors, sanitizeRemediationExecutionErrors, sanitizeRemediationWriteback } from '../../agent/safe-errors';
 import {
   OptimisticConcurrencyError,
   RemediationPlanNotFoundError,
   RemediationPlanRecordSchema,
+  RemediationExecutionResultSchema,
+  RemediationWritebackResultSchema,
   SCHEMA_VERSION,
   type RemediationPlanRecord,
   type RemediationPlanState
@@ -32,7 +35,7 @@ import {
 const SELECT_COLUMNS = `
   id, investigation_id as "investigationId", incident_id as "incidentId",
   product_id as "productId", trigger_asset as "triggerAsset", requested_by as "requestedBy",
-  state, version,
+  state, version, remote_action_binding_json as "remoteActionBindingJson",
   proposed_corrections_json as "proposedCorrectionsJson",
   verification_expectations_json as "verificationExpectationsJson",
   approval_action as "approvalAction", approved_by as "approvedBy", approval_note as "approvalNote",
@@ -57,6 +60,7 @@ interface RemediationPlanRow {
   requestedBy: string;
   state: string;
   version: number;
+  remoteActionBindingJson?: string | null;
   proposedCorrectionsJson: string;
   verificationExpectationsJson: string;
   approvalAction: string | null;
@@ -72,7 +76,7 @@ interface RemediationPlanRow {
 }
 
 function rowToRecord(row: RemediationPlanRow): RemediationPlanRecord {
-  return RemediationPlanRecordSchema.parse({
+  return sanitizeRemediationErrors(RemediationPlanRecordSchema.parse({
     schemaVersion: SCHEMA_VERSION,
     id: row.id,
     investigationId: row.investigationId,
@@ -82,6 +86,7 @@ function rowToRecord(row: RemediationPlanRow): RemediationPlanRecord {
     requestedBy: row.requestedBy,
     state: row.state,
     version: row.version,
+    remoteActionBinding: row.remoteActionBindingJson ? JSON.parse(row.remoteActionBindingJson) : null,
     proposedCorrections: JSON.parse(row.proposedCorrectionsJson),
     verificationExpectations: JSON.parse(row.verificationExpectationsJson),
     approvalAction: row.approvalAction,
@@ -94,18 +99,19 @@ function rowToRecord(row: RemediationPlanRow): RemediationPlanRecord {
     datahubWriteback: row.datahubWritebackJson ? JSON.parse(row.datahubWritebackJson) : null,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt)
-  });
+  }));
 }
 
 export async function createRemediationPlan(pool: Queryable, plan: RemediationPlanRecord): Promise<void> {
+  plan = sanitizeRemediationErrors(plan);
   await pool.query(
     `insert into remediation_plans
        (id, investigation_id, incident_id, product_id, trigger_asset, requested_by,
         state, version, proposed_corrections_json, verification_expectations_json,
         approval_action, approved_by, approval_note, approved_at,
         execution_result_json, executed_at, verification_json, datahub_writeback_json,
-        created_at, updated_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+        created_at, updated_at, remote_action_binding_json)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
     [
       plan.id,
       plan.investigationId,
@@ -126,7 +132,8 @@ export async function createRemediationPlan(pool: Queryable, plan: RemediationPl
       plan.verification ? JSON.stringify(plan.verification) : null,
       plan.datahubWriteback ? JSON.stringify(plan.datahubWriteback) : null,
       plan.createdAt,
-      plan.updatedAt
+      plan.updatedAt,
+      plan.remoteActionBinding ? JSON.stringify(plan.remoteActionBinding) : null
     ]
   );
 }
@@ -185,10 +192,14 @@ export async function applyRemediationPlanTransition(
       patch.approvedBy ?? null,
       patch.approvalNote ?? null,
       patch.approvedAt ?? null,
-      patch.executionResultJson ?? null,
+      patch.executionResultJson
+        ? JSON.stringify(sanitizeRemediationExecutionErrors(RemediationExecutionResultSchema.parse(JSON.parse(patch.executionResultJson))))
+        : patch.executionResultJson ?? null,
       patch.executedAt ?? null,
       patch.verificationJson ?? null,
-      patch.datahubWritebackJson ?? null,
+      patch.datahubWritebackJson
+        ? JSON.stringify(sanitizeRemediationWriteback(RemediationWritebackResultSchema.parse(JSON.parse(patch.datahubWritebackJson))))
+        : patch.datahubWritebackJson ?? null,
       patch.updatedAt
     ]
   );

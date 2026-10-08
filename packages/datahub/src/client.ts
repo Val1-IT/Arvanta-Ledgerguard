@@ -9,10 +9,7 @@ import {
 } from './types';
 import { datahubPythonRoot, findRepoRoot } from './config';
 
-const repoRoot = findRepoRoot();
-const pythonRoot = datahubPythonRoot(repoRoot);
-
-function resolveInterpreter(): string {
+function resolveInterpreter(repoRoot: string): string {
   const candidates = [
     path.join(repoRoot, '.venv', 'Scripts', 'python.exe'),
     path.join(repoRoot, '.venv', 'bin', 'python')
@@ -96,8 +93,22 @@ export interface DataHubResolutionResult {
 
 function runBridge(command: 'read' | 'writeback' | 'resolve', payload: Record<string, unknown>): Promise<BridgeRawResult> {
   return new Promise((resolve, reject) => {
+    // Catalog context is optional. Importing this package must not require the
+    // source tree or Python assets in a Next standalone/container distribution.
+    let repoRoot: string;
+    try {
+      repoRoot = findRepoRoot();
+    } catch {
+      reject(new DataHubBridgeError(
+        'MCP_UNAVAILABLE',
+        'The optional DataHub Python bridge requires a source checkout with its Python dependencies; it is not included in the standalone app image.',
+        []
+      ));
+      return;
+    }
+    const pythonRoot = datahubPythonRoot(repoRoot);
     const pythonPath = [pythonRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
-    const child = spawn(resolveInterpreter(), ['-m', 'src.datahub.mcp.agent_bridge', command], {
+    const child = spawn(resolveInterpreter(repoRoot), ['-m', 'src.datahub.mcp.agent_bridge', command], {
       cwd: repoRoot,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONPATH: pythonPath }

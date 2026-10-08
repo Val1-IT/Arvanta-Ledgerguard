@@ -31,6 +31,17 @@ describe('ActivityLogger.record — success path', () => {
 });
 
 describe('ActivityLogger.record — failure path', () => {
+  it.each([
+    'response: {"api_key":"synthetic-private-value"}',
+    'postgres://user:synthetic-private-value@example.invalid/database',
+    'unexpected response: synthetic-private-value'
+  ])('never persists arbitrary upstream diagnostics: %s', async (message) => {
+    const logger = new ActivityLogger();
+    await expect(logger.record('engine.loadInvestigationInput', () => { throw new Error(message); })).rejects.toThrow(message);
+    expect(JSON.stringify(logger.finalize())).not.toContain('synthetic-private-value');
+    expect(logger.finalize()[0].status).toBe('ERROR');
+  });
+
   it('records an ERROR entry with a sanitized message and still rethrows the original error', async () => {
     const logger = new ActivityLogger();
     const secretToken = 'A'.repeat(40);
@@ -51,6 +62,19 @@ describe('ActivityLogger.record — failure path', () => {
 });
 
 describe('ActivityLogger.ingest + finalize — merges and reorders across sources', () => {
+  it('does not trust the errorSanitized label on an upstream error entry', () => {
+    const logger = new ActivityLogger();
+    const upstream: ActivityLogEntry = {
+      seq: 1, tool: 'datahub.search', startedAt: '2026-01-01T00:00:00.000Z', finishedAt: '2026-01-01T00:00:00.000Z',
+      durationMs: 0, inputSummary: '{}', outputSummary: '', status: 'ERROR',
+      errorSanitized: 'upstream diagnostic synthetic-private-value'
+    };
+    logger.ingest([upstream]);
+    expect(JSON.stringify(logger.finalize())).not.toContain('synthetic-private-value');
+    expect(logger.finalize()[0].status).toBe('ERROR');
+    expect(upstream.errorSanitized).toContain('synthetic-private-value');
+  });
+
   it('merges externally-supplied entries with in-process record() calls into one chronologically ordered, resequenced log', async () => {
     const logger = new ActivityLogger();
     const earlier: ActivityLogEntry = {
