@@ -61,8 +61,11 @@ export async function executeRemoteConstrainedAction(
   input: ExecuteRemoteActionInput,
   deps: ExecuteRemoteActionDeps
 ): Promise<ExecuteRemediationPlanResult> {
-  // The caller must not be able to change approved intent during an awaited read.
-  const action = JSON.parse(JSON.stringify(input.action)) as ConstrainedAction;
+  // Snapshot scalars before awaiting I/O and use the same JSON representation as
+  // the persisted approval binding. Caller-only Map/Date/etc. semantics must not
+  // reach the adapter after a comparison that approved only their JSON form.
+  input = { ...input, action: JSON.parse(JSON.stringify(input.action)) as ConstrainedAction };
+  const action = input.action;
   const now = deps.now ?? (() => new Date());
   const authority = assertTrustedExecutor(deps.authority);
   const audit = deps.audit ?? createMemoryAuditLog();
@@ -85,6 +88,7 @@ export async function executeRemoteConstrainedAction(
       adapter: deps.adapter,
       action,
       plan,
+      executionPlanVersion: existingKey.planVersion,
       idempotencyKey,
       authorityActorId: authority.actorId,
       now: now(),
@@ -102,6 +106,7 @@ export async function executeRemoteConstrainedAction(
       adapter: deps.adapter,
       action,
       plan,
+      executionPlanVersion: existingKey.planVersion,
       idempotencyKey,
       authorityActorId: authority.actorId,
       now: now(),
@@ -286,6 +291,7 @@ async function recoverRemoteReserved(input: {
   adapter: ConstrainedActionAdapter;
   action: ConstrainedAction;
   plan: RemediationPlanRecord;
+  executionPlanVersion: number;
   idempotencyKey: string;
   authorityActorId: string;
   now: Date;
@@ -302,20 +308,9 @@ async function recoverRemoteReserved(input: {
   if (classification === 'applied') {
     return finishRemoteApplied(input, classification);
   }
-  if (classification === 'not_applied') {
-    const recovery = await input.keys.recoverExpiredReservation({
-      key: input.idempotencyKey,
-      classification: 'not_applied',
-      now: input.now
-    });
-    if (recovery === 'in_flight') throw new ConcurrentExecutionError();
-    if (recovery !== 'failed_retryable') return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
-    if (input.plan.state === 'APPROVED') {
-      return { plan: input.plan, outcome: 'INTERRUPTED' };
-    }
-    const interrupted = await recoveryTransition(input.pool, input.plan, 'INTERRUPTED', input.now);
-    return { plan: interrupted, outcome: 'INTERRUPTED' };
-  }
+  // A remote pre-state observation is not a fence: an expired worker or its
+  // request can still commit later. Without termination/fencing evidence, never
+  // release the reservation or authorize another mutation from this snapshot.
   input.audit.append({
     occurredAt: input.now.toISOString(),
     type: 'execution.recovery_ambiguous',
@@ -332,6 +327,7 @@ async function reconcileRemoteCompleted(input: {
   adapter: ConstrainedActionAdapter;
   action: ConstrainedAction;
   plan: RemediationPlanRecord;
+  executionPlanVersion: number;
   idempotencyKey: string;
   authorityActorId: string;
   now: Date;
@@ -354,6 +350,7 @@ async function finishRemoteApplied(
     adapter: ConstrainedActionAdapter;
     action: ConstrainedAction;
     plan: RemediationPlanRecord;
+    executionPlanVersion: number;
     idempotencyKey: string;
     authorityActorId: string;
     now: Date;
@@ -364,10 +361,10 @@ async function finishRemoteApplied(
   const receipt = buildExecutionReceipt({
     executionId: `recover:${randomUUID()}`,
     planId: input.plan.id,
-    planVersion: input.plan.version,
+    planVersion: input.executionPlanVersion,
     idempotencyKey: input.idempotencyKey,
     status: ExecutionStatus.alreadyExecuted,
-    sourceStateFingerprint: await input.adapter.fingerprint(input.action),
+    sourceStateFingerprint: input.plan.remoteActionBinding!.expectedFingerprint,
     adapter: {
       systemId: input.adapter.meta.systemId,
       systemType: input.adapter.meta.systemType,
@@ -392,7 +389,7 @@ async function finishRemoteApplied(
       id: `journal:${receipt.executionId}`,
       key: input.idempotencyKey,
       planId: input.plan.id,
-      planVersion: input.plan.version,
+      planVersion: input.executionPlanVersion,
       status: receipt.status,
       sourceStateFingerprint: receipt.sourceStateFingerprint,
       receipt,
