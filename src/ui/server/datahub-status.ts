@@ -1,3 +1,5 @@
+import { formatSafeError } from '../../agent/safe-errors';
+
 export type DatahubUiStatus = 'CONNECTED' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
 
 /**
@@ -19,14 +21,13 @@ export async function probeDatahubStatus(): Promise<{ status: DatahubUiStatus; d
     }).finally(() => clearTimeout(timer));
 
     if (response.ok) {
-      return { status: 'CONNECTED', detail: `GMS reachable at ${gmsUrl}` };
+      return { status: 'CONNECTED', detail: 'GMS is reachable.' };
     }
     return {
       status: 'UNAVAILABLE',
-      detail: `GMS responded HTTP ${response.status} from ${gmsUrl}`
+      detail: `GMS responded HTTP ${response.status}.`
     };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown GMS probe error';
-    return { status: 'UNAVAILABLE', detail: message };
+  } catch {
+    return { status: 'UNAVAILABLE', detail: formatSafeError('MCP_UNAVAILABLE') };
   }
 }

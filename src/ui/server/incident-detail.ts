@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { sanitizeRemediationErrors } from '../../agent/safe-errors';
 import type { InvestigationRunRecord } from '../../agent/types';
 import { loadInvestigationRun } from '../../db/repositories/investigation-runs';
 import { loadInvestigationInput } from '../../db/repositories/investigation';
@@ -195,7 +196,8 @@ export function buildIncidentDetailViewModel(parts: {
   backendUnavailable?: boolean;
   demoModeEnabled?: boolean;
 }): IncidentDetailViewModel {
-  const { run, engineReport, remediationPlan } = parts;
+  const { run, engineReport } = parts;
+  const remediationPlan = parts.remediationPlan ? sanitizeRemediationErrors(parts.remediationPlan) : null;
   const completed = run.finalState === 'INVESTIGATION_COMPLETED' && run.output !== null;
   const activity = buildActivityLog(run);
   const demoModeEnabled = parts.demoModeEnabled ?? isDemoModeEnabled();

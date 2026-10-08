@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { runInvestigation } from '../../src/agent/orchestrator';
 import { createInvestigationModel } from '../../src/agent/model-factory';
 import { getServerPool } from '../../src/agent/server-pool';
+import { assertDemoMode } from '../../src/ui/lib/demo-mode';
 
 // ---------------------------------------------------------------------------
 // Server action backing the minimum test UI (app/agent/page.tsx). Uses
@@ -13,6 +14,7 @@ import { getServerPool } from '../../src/agent/server-pool';
 // ---------------------------------------------------------------------------
 
 export async function triggerInvestigation(formData: FormData): Promise<void> {
+  assertDemoMode('Run investigation');
   const rawInput = {
     incidentId: String(formData.get('incidentId') ?? ''),
     productId: String(formData.get('productId') ?? ''),

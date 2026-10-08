@@ -1,8 +1,11 @@
 import type { Queryable } from '../queryable';
+import { sanitizeRemediationErrors, sanitizeRemediationExecutionErrors, sanitizeRemediationWriteback } from '../../agent/safe-errors';
 import {
   OptimisticConcurrencyError,
   RemediationPlanNotFoundError,
   RemediationPlanRecordSchema,
+  RemediationExecutionResultSchema,
+  RemediationWritebackResultSchema,
   SCHEMA_VERSION,
   type RemediationPlanRecord,
   type RemediationPlanState
@@ -73,7 +76,7 @@ interface RemediationPlanRow {
 }
 
 function rowToRecord(row: RemediationPlanRow): RemediationPlanRecord {
-  return RemediationPlanRecordSchema.parse({
+  return sanitizeRemediationErrors(RemediationPlanRecordSchema.parse({
     schemaVersion: SCHEMA_VERSION,
     id: row.id,
     investigationId: row.investigationId,
@@ -96,10 +99,11 @@ function rowToRecord(row: RemediationPlanRow): RemediationPlanRecord {
     datahubWriteback: row.datahubWritebackJson ? JSON.parse(row.datahubWritebackJson) : null,
     createdAt: toIso(row.createdAt),
     updatedAt: toIso(row.updatedAt)
-  });
+  }));
 }
 
 export async function createRemediationPlan(pool: Queryable, plan: RemediationPlanRecord): Promise<void> {
+  plan = sanitizeRemediationErrors(plan);
   await pool.query(
     `insert into remediation_plans
        (id, investigation_id, incident_id, product_id, trigger_asset, requested_by,
@@ -188,10 +192,14 @@ export async function applyRemediationPlanTransition(
       patch.approvedBy ?? null,
       patch.approvalNote ?? null,
       patch.approvedAt ?? null,
-      patch.executionResultJson ?? null,
+      patch.executionResultJson
+        ? JSON.stringify(sanitizeRemediationExecutionErrors(RemediationExecutionResultSchema.parse(JSON.parse(patch.executionResultJson))))
+        : patch.executionResultJson ?? null,
       patch.executedAt ?? null,
       patch.verificationJson ?? null,
-      patch.datahubWritebackJson ?? null,
+      patch.datahubWritebackJson
+        ? JSON.stringify(sanitizeRemediationWriteback(RemediationWritebackResultSchema.parse(JSON.parse(patch.datahubWritebackJson))))
+        : patch.datahubWritebackJson ?? null,
       patch.updatedAt
     ]
   );

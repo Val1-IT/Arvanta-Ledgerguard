@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formatSafeError } from '../../../src/agent/safe-errors';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import type { IncidentDetailViewModel } from '../../../src/ui/view-models/incident-detail';
 import { ConfirmDialog } from '../../../src/ui/components/confirm-dialog';
@@ -81,9 +82,9 @@ export function RemediationControls({
       try {
         const result = await work();
         finish(result, successFallback);
-      } catch (err) {
+      } catch {
         lockRef.current = false;
-        setError(err instanceof Error ? err.message : 'Action failed');
+        setError(formatSafeError('REMEDIATION_ACTION_FAILED'));
         setErrorCode(null);
         setPending(null);
         setConfirm(null);

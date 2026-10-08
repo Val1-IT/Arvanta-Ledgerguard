@@ -3,6 +3,9 @@ import { createInvestigationModel } from '../../src/agent/model-factory';
 import { labelModelSource } from '../../src/ui/lib/status-labels';
 import { triggerInvestigation } from './actions';
 import { LookupForm } from './lookup-form';
+import { isDemoModeEnabled } from '../../src/ui/lib/demo-mode';
+
+export const dynamic = 'force-dynamic';
 
 // ---------------------------------------------------------------------------
 // FASE 5 minimum test UI: trigger one investigation run and look up a prior
@@ -14,13 +17,16 @@ import { LookupForm } from './lookup-form';
 // ---------------------------------------------------------------------------
 
 export default function AgentPage() {
-  let modelLabel = 'Deterministic test provider';
+  const demoEnabled = isDemoModeEnabled();
+  let modelLabel = demoEnabled ? 'Deterministic test provider' : 'Disabled';
   try {
-    const selection = createInvestigationModel();
-    modelLabel =
-      selection.modelSource === 'DETERMINISTIC_TEMPLATE'
-        ? 'Deterministic test provider'
-        : `${labelModelSource(selection.modelSource)} (live)`;
+    if (demoEnabled) {
+      const selection = createInvestigationModel();
+      modelLabel =
+        selection.modelSource === 'DETERMINISTIC_TEMPLATE'
+          ? 'Deterministic test provider'
+          : `${labelModelSource(selection.modelSource)} (live)`;
+    }
   } catch {
     modelLabel = 'Misconfigured live model';
   }
@@ -40,6 +46,12 @@ export default function AgentPage() {
           <h2 className="font-bold">Run a new investigation</h2>
           <span className="lg-tag border-ink text-ink-muted">Model: {modelLabel}</span>
         </div>
+        {!demoEnabled && (
+          <p role="status" className="text-sm text-ink-muted">
+            Investigations are disabled. This test action can call configured model services and write DataHub metadata.
+            Enable DEMO_MODE only in an isolated synthetic-data environment; it is not authentication.
+          </p>
+        )}
         <form action={triggerInvestigation} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="text-sm">
             <span className="mb-1 block font-semibold">Incident ID</span>
@@ -89,7 +101,7 @@ export default function AgentPage() {
             </select>
           </label>
           <div className="flex items-end">
-            <button type="submit" className="lg-btn-gold w-full sm:w-auto">
+            <button type="submit" disabled={!demoEnabled} className="lg-btn-gold w-full sm:w-auto">
               Run investigation
             </button>
           </div>

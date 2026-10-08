@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formatSafeError } from '../../src/agent/safe-errors';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { ConfirmDialog } from '../../src/ui/components/confirm-dialog';
 import { resetDemoAction, simulateConversionErrorAction } from './actions';
@@ -42,7 +43,7 @@ export function DemoControls({
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Simulate failed';
         if (!message.includes('NEXT_REDIRECT')) {
-          setError(message);
+          setError(formatSafeError('DEMO_ACTION_FAILED'));
         }
         setPendingAction(null);
         lockRef.current = false;
