@@ -9,9 +9,8 @@ playwright-report
 .venv
 __pycache__
 *.pyc
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 *.log
 npm-debug.log*
 .git
