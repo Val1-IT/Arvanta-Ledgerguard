@@ -18,15 +18,19 @@ jobs:
           version: 9.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Bootstrap and verify demo without prior install or environment file
         run: pnpm demo
       - name: Repeat demo
         run: pnpm demo
 
   unit:
-    name: Unit and packages
+    name: Unit and packages (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -34,7 +38,7 @@ jobs:
           version: 9.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -50,8 +54,12 @@ jobs:
         run: pnpm run build
 
   integration:
-    name: PostgreSQL integration
+    name: PostgreSQL integration (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
     services:
       postgres:
         image: postgres:16-alpine
@@ -75,7 +83,7 @@ jobs:
           version: 9.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -93,3 +101,16 @@ jobs:
         run: docker build --tag ledgerguard:ci .
       - name: Verify standalone server exists in the image
         run: docker run --rm ledgerguard:ci node --check server.js
+      - name: Start image and verify the HTTP server responds
+        run: |
+          docker run --detach --name ledgerguard-smoke --publish 127.0.0.1:3000:3000 --env DEMO_MODE=true ledgerguard:ci
+          for attempt in $(seq 1 30); do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/_not-found || true)"
+            if [ "$code" = 404 ]; then exit 0; fi
+            sleep 2
+          done
+          docker logs ledgerguard-smoke
+          exit 1
+      - name: Stop disposable image
+        if: always()
+        run: docker rm --force ledgerguard-smoke || true

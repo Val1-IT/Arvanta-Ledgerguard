@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security reporting instructions
+    url: https://github.com/Val1-IT/Arvanta-Ledgerguard/blob/main/SECURITY.md
+    about: Follow the private reporting instructions; do not disclose vulnerabilities or secrets in public issues.

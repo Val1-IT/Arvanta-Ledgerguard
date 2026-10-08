@@ -25,6 +25,9 @@ export async function executeConstrainedAction(
   action: ConstrainedAction,
   expectedFingerprint?: string
 ): Promise<ConstrainedActionExecutionResult> {
+  // Validation and execution must observe the same intent even if the caller
+  // changes its own object while an adapter operation is awaiting I/O.
+  action = structuredClone(action);
   const validated = await adapter.validate(action);
   if (!validated.ok) {
     return baseResult({
@@ -52,7 +55,7 @@ export async function executeConstrainedAction(
   }
 
   const executed = await adapter.execute(action);
-  if (executed.recoveryRequired) {
+  if (executed.recoveryRequired || (executed.stale && executed.remoteWriteAttempted)) {
     const fingerprintAfter = await adapter.fingerprint(action).catch(() => null);
     return baseResult({
       outcome: 'RECOVERY_REQUIRED',

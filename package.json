@@ -2,7 +2,7 @@
   "name": "ledgerguard",
   "version": "0.3.0",
   "private": true,
-  "description": "Open-source safety runtime for AI agents operating on systems of record. LLMs may investigate and propose repairs; LedgerGuard decides whether mutations may execute.",
+  "description": "A deterministic execution integrity runtime for AI agents operating on systems of record. Fixes come from deterministic detectors; the LLM never authors mutations.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -102,7 +102,9 @@
       "vite": "6.4.3",
       "brace-expansion@1": "1.1.21",
       "brace-expansion@5": "5.0.12",
-      "js-yaml@4": "4.3.2"
+      "js-yaml@4": "4.3.2",
+      "@esbuild-kit/core-utils>esbuild": "0.25.12",
+      "postcss-selector-parser@6": "7.1.6"
     }
   }
 }

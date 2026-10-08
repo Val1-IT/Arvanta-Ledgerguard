@@ -96,10 +96,13 @@ export async function reconcileCompletedExecution(input: {
 
   const verification = verifyState(snapshot);
   const existing = await input.keys.get(input.idempotencyKey);
+  if (!existing || existing.state !== 'completed') {
+    return { plan, outcome: 'RECOVERY_REQUIRED' };
+  }
   const receipt = buildExecutionReceipt({
     executionId: `recover:${randomUUID()}`,
     planId: plan.id,
-    planVersion: plan.version,
+    planVersion: existing.planVersion,
     idempotencyKey: input.idempotencyKey,
     status: ExecutionStatus.alreadyExecuted,
     sourceStateFingerprint: sourceStateFingerprint(plan.proposedCorrections),
@@ -116,7 +119,7 @@ export async function reconcileCompletedExecution(input: {
       id: `journal:${receipt.executionId}`,
       key: input.idempotencyKey,
       planId: plan.id,
-      planVersion: plan.version,
+      planVersion: existing.planVersion,
       status: receipt.status,
       sourceStateFingerprint: receipt.sourceStateFingerprint,
       receipt,
@@ -200,10 +203,10 @@ export async function recoverExpiredReservation(input: {
   });
 
   if (classification === 'applied') {
-    return finishAppliedRecovery({ ...input, snapshot, classification });
+    return finishAppliedRecovery({ ...input, executionPlanVersion: existing.planVersion, snapshot, classification });
   }
   if (classification === 'not_applied') {
-    return finishNotAppliedRecovery(input);
+    return finishNotAppliedRecovery({ ...input, executionPlanVersion: existing.planVersion });
   }
 
   input.audit.append({
@@ -221,6 +224,7 @@ async function finishAppliedRecovery(input: {
   keys: PostgresExecutionKeyStore;
   adapter: SystemOfRecordAdapter;
   plan: RemediationPlanRecord;
+  executionPlanVersion: number;
   idempotencyKey: string;
   authorityActorId: string;
   now: Date;
@@ -232,7 +236,7 @@ async function finishAppliedRecovery(input: {
   const receipt = buildExecutionReceipt({
     executionId: `recover:${randomUUID()}`,
     planId: input.plan.id,
-    planVersion: input.plan.version,
+    planVersion: input.executionPlanVersion,
     idempotencyKey: input.idempotencyKey,
     status: ExecutionStatus.alreadyExecuted,
     sourceStateFingerprint: sourceStateFingerprint(input.plan.proposedCorrections),
@@ -268,7 +272,7 @@ async function finishAppliedRecovery(input: {
       id: `journal:${receipt.executionId}`,
       key: input.idempotencyKey,
       planId: input.plan.id,
-      planVersion: input.plan.version,
+      planVersion: input.executionPlanVersion,
       status: receipt.status,
       sourceStateFingerprint: receipt.sourceStateFingerprint,
       receipt,
@@ -317,6 +321,7 @@ async function finishNotAppliedRecovery(input: {
   keys: PostgresExecutionKeyStore;
   adapter: SystemOfRecordAdapter;
   plan: RemediationPlanRecord;
+  executionPlanVersion: number;
   idempotencyKey: string;
   authorityActorId: string;
   now: Date;
@@ -325,7 +330,7 @@ async function finishNotAppliedRecovery(input: {
   const receipt = buildExecutionReceipt({
     executionId: `recover:${randomUUID()}`,
     planId: input.plan.id,
-    planVersion: input.plan.version,
+    planVersion: input.executionPlanVersion,
     idempotencyKey: input.idempotencyKey,
     status: ExecutionStatus.rolledBack,
     sourceStateFingerprint: sourceStateFingerprint(input.plan.proposedCorrections),

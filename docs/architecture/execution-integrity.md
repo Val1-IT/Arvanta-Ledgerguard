@@ -25,7 +25,7 @@ Failure / recovery statuses:
 
 `DENIED | STALE | VERIFICATION_FAILED | ROLLED_BACK | RECOVERY_REQUIRED | FAILED | ALREADY_EXECUTED`
 
-These statuses appear on the structured `ExecutionReceipt`. The demo plan row uses `APPROVED` → `EXECUTING` → `VERIFYING` → `RESOLVED`. Crash recovery may use recovery-only transitions `EXECUTING|VERIFYING → RESOLVED` (applied) or `→ INTERRUPTED` (not applied). `INTERRUPTED → EXECUTING` resumes the original approval; it is not a new approval.
+These statuses appear on the structured `ExecutionReceipt`. The demo plan row uses `APPROVED` → `EXECUTING` → `VERIFYING` → `RESOLVED`. Native PostgreSQL crash recovery may use recovery-only transitions `EXECUTING|VERIFYING → RESOLVED` (applied) or `→ INTERRUPTED` (not applied). `INTERRUPTED → EXECUTING` resumes the original approval; it is not a new approval.
 
 Reserved-key recovery runs **before** fresh execution policy and **before** `APPROVED → EXECUTING`. An in-flight leftover is not treated as a new execution attempt.
 
@@ -75,3 +75,16 @@ write inside one Odoo transaction. `nativeTransactions` and
 `idempotencyInNativeTransaction` stay false for the cross-system control plane;
 narrow addon capabilities describe only that remote conditional operation.
 See [Odoo scope and limits](../integrations/odoo.md).
+
+## Preserved evidence and conservative remote retries
+
+Recovered receipts and journal rows identify the original execution-key owner
+version and approved source fingerprint. The live plan version is used only for
+optimistic state transitions. Receipt fields survive the plan schema parser and
+reload, so operators can inspect the same execution identity after recovery.
+
+For remote actions, a lease deadline is not a cancellation acknowledgement.
+Even a current `not_applied` observation cannot prove the old request will never
+arrive. The control plane therefore keeps the reservation and reports
+`RECOVERY_REQUIRED`; it does not automatically release a key or start another
+remote attempt. This intentionally differs from native transactional recovery.

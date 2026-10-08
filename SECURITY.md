@@ -21,3 +21,9 @@ Do not file public issues that include working exploits against the demo databas
 ## Supported versions
 
 Report issues against current `main` or the exact commit of an open development PR; the latest published release is v0.2.0 and v0.3 is experimental. There is no long-term support commitment until a stable 1.0.
+
+| Code line | Reporting scope |
+| --- | --- |
+| Current main / v0.2.x release line | Report reproducible issues against the exact revision. |
+| Open development PRs / experimental v0.3 | Include the commit SHA; draft code is not a released production guarantee. |
+| v0.1.x and older | No continuing maintenance commitment; reproduce on current code if possible. |

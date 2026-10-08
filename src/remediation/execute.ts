@@ -71,6 +71,8 @@ export async function executeRemediationPlan(
   input: ExecuteRemediationPlanInput,
   deps: ExecuteRemediationPlanDeps
 ): Promise<ExecuteRemediationPlanResult> {
+  // Keep request identity stable across every awaited repository/adapter call.
+  input = { ...input };
   const { pool } = deps;
   const now = deps.now ?? (() => new Date());
   const authority = assertTrustedExecutor(deps.authority);

@@ -1,3 +1,12 @@
+## Unreleased — independent evaluation hardening
+
+- Preserve recovery receipt provenance and persisted receipt fields.
+- Snapshot execution requests before awaiting; keep contradictory/uncertain remote outcomes recoverable.
+- Do not release remote reservations solely because an expired call currently appears not applied.
+- Patch two remaining moderate development-tool dependency paths; one unpatched high braces advisory remains explicit.
+- Reconcile PR #5 community forms, contributor guidance and historical archive into this integration branch without merging or editing that PR.
+- Run Node 20/22/24 compatibility checks, default tooling/container to Node 24, and exercise real container HTTP startup.
+
 ## Unreleased — execution-boundary hardening
 
 - Bind remote approval to persisted action, adapter identity and source fingerprint.
