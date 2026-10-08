@@ -36,6 +36,7 @@ jobs:
         run: |
           chmod +x scripts/odoo-ci-bootstrap.sh
           KEY="$(bash scripts/odoo-ci-bootstrap.sh | tail -n 1)"
+          echo "::add-mask::$KEY"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
       - name: Live JSON-2 and control-plane tests
         env:
