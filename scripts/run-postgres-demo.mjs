@@ -1,20 +1,22 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
-
-const PNPM = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+import { spawnSync } from 'node:child_process';
 
 function runPnpm(args, quiet = false) {
-  try {
-    execFileSync(PNPM, args, {
-      stdio: quiet ? ['inherit', 'pipe', 'pipe'] : 'inherit'
-    });
-  } catch (error) {
-    const err = error;
+  const result = spawnSync('pnpm', args, {
+    encoding: 'utf8',
+    shell: true,
+    stdio: quiet ? ['inherit', 'pipe', 'pipe'] : 'inherit'
+  });
+  if (result.error) {
+    console.error(result.error.message);
+    process.exit(1);
+  }
+  if (result.status !== 0) {
     if (quiet) {
-      if (err.stdout) process.stderr.write(err.stdout);
-      if (err.stderr) process.stderr.write(err.stderr);
+      if (result.stdout) process.stderr.write(result.stdout);
+      if (result.stderr) process.stderr.write(result.stderr);
     }
-    process.exit(typeof err.status === 'number' ? err.status : 1);
+    process.exit(result.status ?? 1);
   }
 }
 
@@ -23,4 +25,4 @@ process.stdout.write(
   'Installing dependencies for the Postgres demo (app db layer, not only the in-memory example)…\n'
 );
 runPnpm(['install', '--frozen-lockfile', '--prod=false', '--reporter', 'silent'], true);
-runPnpm(['exec', 'tsx', 'scripts/demo-pg.ts', ...extra]);
+runPnpm(['exec', 'tsx', 'scripts/demo-pg.ts', ...extra], false);
