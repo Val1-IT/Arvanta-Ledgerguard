@@ -1,8 +1,8 @@
 # LedgerGuard
 
-**A deterministic execution integrity runtime for AI agents operating on systems of record.**
+**A deterministic execution integrity runtime for AI agents operating on systems of record. Fixes come from deterministic detectors; the LLM never authors mutations.**
 
-AI agents may inspect ledgers, correlate evidence, and propose repairs.
+AI agents may inspect ledgers and correlate evidence.
 They must not receive mutation authority merely because an LLM generated a tool call.
 
 LedgerGuard separates **probabilistic reasoning** from **deterministic execution authority**. An approved mutation is not successful until postconditions are verified against the system of record.
@@ -49,7 +49,7 @@ License: [Apache-2.0](LICENSE)
 
 ## Quickstart: one-command local demo
 
-Requires **Node.js 20+** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
+Requires **Node.js 20+** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Node 20 reached end-of-life in April 2026; CI also runs Node 22 and 24. Run these commands in a terminal, including PowerShell on Windows:
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
@@ -69,7 +69,7 @@ Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
 
 This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use the PostgreSQL path below to exercise those.
 
-**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.md) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
+**Trying LedgerGuard?** [Open a tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) with your OS, Node/pnpm versions, commands run, expected vs actual, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 
 ### Manual fallback: same in-memory demo
 
@@ -186,8 +186,10 @@ pnpm verify:integration     # migrate + Postgres integration tests
 pnpm test:datahub           # optional; needs live DataHub
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## History
 
 LedgerGuard began as a DataHub Agent Hackathon prototype. The OSS runtime extracts the deterministic engine, policy, and PostgreSQL adapter so DataHub is one optional integration rather than the product.
+
+Hackathon-era submission, deployment, and judge-video drafts live in [docs/archive/hackathon/](docs/archive/hackathon/).

@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+# Node 20 reached end-of-life in April 2026. It stays in the matrix for now
+# (README engines still say >=20) unless a job fails on it. Unit tests and
+# PostgreSQL integration also run on Node 22 and 24. The Ubuntu/Windows
+# fresh-clone demo job stays on Node 20 so that smoke path does not multiply
+# by runtime version.
+
 jobs:
   demo:
     name: Fresh-clone demo (${{ matrix.os }})
@@ -25,8 +31,12 @@ jobs:
         run: pnpm demo
 
   unit:
-    name: Unit and packages
+    name: Unit and packages (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -34,7 +44,7 @@ jobs:
           version: 9.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -48,8 +58,12 @@ jobs:
         run: pnpm run build
 
   integration:
-    name: PostgreSQL integration
+    name: PostgreSQL integration (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
     services:
       postgres:
         image: postgres:16-alpine
@@ -73,7 +87,7 @@ jobs:
           version: 9.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

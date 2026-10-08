@@ -1,7 +1,7 @@
 # Minimal production image for the LedgerGuard Next.js app.
 # Builds on next.config.mjs's `output: 'standalone'` — this image contains
 # only the app itself. Postgres and DataHub are separate services (see
-# docker-compose.demo.yml and docs/deployment.md); this image does not bundle
+# docker-compose.demo.yml and docs/archive/hackathon/deployment.md); this image does not bundle
 # or start either.
 
 FROM node:20-alpine AS deps

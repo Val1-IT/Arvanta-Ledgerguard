@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions
+    url: https://github.com/Val1-IT/Arvanta-Ledgerguard/discussions
+    about: Questions and tester chat. This URL is a placeholder until Discussions is enabled in repository settings (Settings → General → Features → Discussions).

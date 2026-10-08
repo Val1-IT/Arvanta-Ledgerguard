@@ -1,0 +1,39 @@
+name: Feature or integration
+description: Propose a detector, adapter, or safety improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        LedgerGuard is pre-1.0 (v0.2). Repair proposals come from deterministic detectors; the LLM never authors mutations.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What gap or failure mode are you trying to close?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: "Fits a current v0.2 gap? Examples: crash-safe idempotency recovery, detector aggregation, Odoo/ERPNext adapter exploration, durable audit sink."
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope for v0.2
+      description: OAuth, npm publishing, policy DSL, an MCP server for LedgerGuard itself, and SaaS features belong post-v0.2 unless a maintainer says otherwise.
+      placeholder: Confirm this is not one of those, or explain why it should be reconsidered.
+    validations:
+      required: false
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariants
+      options:
+        - label: This would not treat LLM/model output as execution authority.
+          required: true
+        - label: This would not add arbitrary write SQL.
+          required: true

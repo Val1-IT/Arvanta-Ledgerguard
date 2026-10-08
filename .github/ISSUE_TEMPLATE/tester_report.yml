@@ -1,0 +1,97 @@
+name: Tester report
+description: Report what you ran as an outside tester (demo, Postgres, UI) and what happened
+title: "[Tester] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form if you cloned LedgerGuard and tried `pnpm demo`, the PostgreSQL scenarios, or the demo UI.
+
+        Paste **sanitized** logs only. Strip API keys, `.env` values, and hostnames you do not want public.
+        Security issues: [SECURITY.md](https://github.com/Val1-IT/Arvanta-Ledgerguard/blob/main/SECURITY.md), not this form.
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "macOS 15 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: "`node -v`"
+      placeholder: "v22.11.0"
+    validations:
+      required: true
+  - type: input
+    id: pnpm
+    attributes:
+      label: pnpm version
+      description: "`pnpm -v` (repo pins 9.15.9)"
+      placeholder: "9.15.9"
+    validations:
+      required: true
+  - type: dropdown
+    id: what-ran
+    attributes:
+      label: What did you run?
+      multiple: true
+      options:
+        - "`pnpm demo` (in-memory)"
+        - "`pnpm verify`"
+        - "PostgreSQL compose + `scenario:conversion-error`"
+        - "PostgreSQL compose + `scenario:duplicate-inventory`"
+        - "`pnpm verify:integration`"
+        - "Next.js demo UI (`pnpm dev`)"
+        - "Something else (describe in steps)"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps run
+      description: Exact commands, in order. Include whether you copied `.env.example` or set `DATABASE_URL` yourself.
+      placeholder: |
+        git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
+        cd Arvanta-Ledgerguard
+        pnpm demo
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What you thought would happen (README wording is fine).
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: What happened instead. If it passed, say so — success reports help too.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Sanitized command output. Do not paste secrets.
+      render: shell
+    validations:
+      required: false
+  - type: dropdown
+    id: setup-friction
+    attributes:
+      label: Where did setup or the safety model get confusing?
+      options:
+        - No confusion
+        - Install / Node / pnpm
+        - Whether `.env` is required
+        - PostgreSQL / Docker
+        - How to approve and execute after a Postgres scenario
+        - What the LLM does vs detectors
+        - Replay / DRIFT_DETECTED / ALREADY_EXECUTED
+        - Other (describe in Actual)
+    validations:
+      required: true

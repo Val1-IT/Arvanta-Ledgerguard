@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Tester onboarding and community scaffolding. No runtime behavior changes.
+
+- CI unit and PostgreSQL integration jobs run on Node 20, 22, and 24 (Node 20 is EOL as of April 2026; kept until it breaks)
+- SECURITY.md supported line is `0.2.x`
+- Contributor Covenant 2.1 (`CODE_OF_CONDUCT.md`)
+- YAML issue forms, including a tester report; Discussions contact link is a placeholder until enabled in repo settings
+- Hackathon submission, deployment, video-script, and implementation-plan drafts moved to `docs/archive/hackathon/`
+
 ## 0.2.0
 
 Reliability slice for execution integrity. Not a full adapter SDK and not exactly-once semantics.

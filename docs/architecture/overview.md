@@ -16,8 +16,7 @@ This is the system-level map of LedgerGuard. For module-level detail see:
   data contract the UI is built against
 - [`ledgerguard-demo-flow.md`](../ui/ledgerguard-demo-flow.md) — the
   route-by-route demo script
-- [`../deployment.md`](../deployment.md) — how to run this outside a
-  developer's machine
+- [`../archive/hackathon/deployment.md`](../archive/hackathon/deployment.md) — hackathon-era notes on running the demo outside a developer's machine
 
 ## 1. Components
 
