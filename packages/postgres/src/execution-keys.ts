@@ -19,6 +19,36 @@ export interface ExecutionKeyRecord {
   leaseExpiresAt: Date | string | null;
 }
 
+export interface ExecutionKeyOwner {
+  planId: string;
+  planVersion: number;
+}
+
+export class ExecutionKeyConflictError extends Error {
+  readonly key: string;
+  readonly existingPlanId: string;
+  readonly existingPlanVersion: number;
+  readonly requestedPlanId: string;
+  readonly requestedPlanVersion: number;
+
+  constructor(existing: ExecutionKeyRecord, requested: ExecutionKeyOwner) {
+    super(`Execution key ${existing.key} belongs to a different plan or version`);
+    this.name = 'ExecutionKeyConflictError';
+    this.key = existing.key;
+    this.existingPlanId = existing.planId;
+    this.existingPlanVersion = existing.planVersion;
+    this.requestedPlanId = requested.planId;
+    this.requestedPlanVersion = requested.planVersion;
+  }
+}
+
+/** Validate immutable key ownership before interpreting a prior execution's state. */
+export function assertExecutionKeyOwnership(existing: ExecutionKeyRecord, requested: ExecutionKeyOwner): void {
+  if (existing.planId !== requested.planId || existing.planVersion !== requested.planVersion) {
+    throw new ExecutionKeyConflictError(existing, requested);
+  }
+}
+
 export class PostgresExecutionKeyStore {
   constructor(private readonly db: Queryable) {}
 
@@ -56,6 +86,7 @@ export class PostgresExecutionKeyStore {
     if (!existing) {
       return 'in_flight';
     }
+    assertExecutionKeyOwnership(existing, input);
     if (existing.state === 'completed') {
       return 'already_completed';
     }
@@ -65,9 +96,9 @@ export class PostgresExecutionKeyStore {
 
     const retried = await this.db.query(
       `update ledgerguard_execution_keys
-          set state = 'reserved', plan_id = $2, plan_version = $3, created_at = $4,
+          set state = 'reserved', created_at = $4,
               completed_at = null, result_json = null, lease_expires_at = $5
-        where key = $1 and state = 'failed_retryable'
+        where key = $1 and state = 'failed_retryable' and plan_id = $2 and plan_version = $3
         returning key`,
       [input.key, input.planId, input.planVersion, input.now, leaseExpiresAt]
     );
@@ -154,27 +185,39 @@ export class PostgresExecutionKeyStore {
       return 'in_flight';
     }
 
-    if (input.classification === 'applied') {
-      const completed = await this.db.query(
-        `update ledgerguard_execution_keys
-            set state = 'completed', completed_at = $2, result_json = $3, lease_expires_at = null
-          where key = $1 and state = 'reserved'
-          returning key`,
-        [input.key, input.now, JSON.stringify(input.receipt ?? { status: 'RECOVERED_APPLIED' })]
-      );
-      if ((completed.rowCount ?? completed.rows.length) > 0) {
-        return 'completed';
-      }
-      const raced = await this.get(input.key);
-      return raced?.state === 'completed' ? 'completed' : 'in_flight';
+    if (input.classification !== 'applied' && input.classification !== 'not_applied') {
+      return 'recovery_required';
     }
 
-    if (input.classification === 'not_applied') {
-      await this.failRetryable(input.key, input.now, input.receipt ?? { status: 'STALE_RESERVED_NOT_APPLIED' });
-      return 'failed_retryable';
+    const state = input.classification === 'applied' ? 'completed' : 'failed_retryable';
+    const receipt = input.receipt ?? {
+      status: input.classification === 'applied' ? 'RECOVERED_APPLIED' : 'STALE_RESERVED_NOT_APPLIED'
+    };
+    const recovered = await this.db.query(
+      `update ledgerguard_execution_keys
+          set state = '${state}', completed_at = $2, result_json = $3, lease_expires_at = null
+        where key = $1 and state = 'reserved'
+          and plan_id = $4 and plan_version = $5
+          and created_at is not distinct from $6
+          and lease_expires_at is not distinct from $7
+        returning key`,
+      [
+        input.key,
+        input.now,
+        JSON.stringify(receipt),
+        existing.planId,
+        existing.planVersion,
+        existing.createdAt,
+        existing.leaseExpiresAt
+      ]
+    );
+    if ((recovered.rowCount ?? recovered.rows.length) > 0) {
+      return state;
     }
 
-    return 'recovery_required';
+    const raced = await this.get(input.key);
+    if (raced) assertExecutionKeyOwnership(raced, existing);
+    return raced?.state === 'completed' || raced?.state === 'failed_retryable' ? raced.state : 'in_flight';
   }
 }
 

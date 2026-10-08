@@ -2,7 +2,7 @@
 
 ## Setup
 
-- Node.js 20+
+- Node.js 24, or supported 20.19+ / 22.12+ (see root `engines`)
 - pnpm 9 (`packageManager` in root `package.json`)
 - Docker (for PostgreSQL integration)
 
@@ -53,3 +53,19 @@ pnpm verify
 - Add tests for new behavior.
 - Do not commit secrets.
 - Do not claim production readiness.
+
+## Execution-boundary regression checks
+
+Use a disposable PostgreSQL database for `pnpm verify:integration`; its fixtures
+reset synthetic tables. `tests/integration/remote-control-plane.test.ts` exercises
+persisted remote approval and receipt reload with a simulated remote transport.
+Keep the distinction from the real Odoo JSON-2 suite explicit.
+
+For remote runtime changes, cover action substitution after approval, stale state,
+wrong-plan idempotency keys, renewed-lease recovery races, post-write transport
+failure, verification failure followed by recovery, and durable record reloads.
+A passing mocked pool must not substitute for database integration coverage.
+
+For Odoo addon changes, run offline TypeScript/Python checks, then the isolated
+Odoo CI server and live suites. Never run mutating integration tests with a
+production credential or connection string.

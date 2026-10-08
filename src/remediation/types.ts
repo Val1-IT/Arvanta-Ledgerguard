@@ -179,6 +179,14 @@ export type RemediationWritebackResult = z.infer<typeof RemediationWritebackResu
 // investigation_runs' own denormalization pattern.
 // ---------------------------------------------------------------------------
 
+export const RemoteActionBindingSchema = z.object({
+  systemId: z.string().min(1),
+  systemType: z.string().min(1),
+  actionJson: z.string().min(1),
+  expectedFingerprint: z.string().min(1)
+});
+export type RemoteActionBinding = z.infer<typeof RemoteActionBindingSchema>;
+
 export const RemediationPlanRecordSchema = z.object({
   schemaVersion: z.literal(SCHEMA_VERSION),
   id: z.string(),
@@ -193,6 +201,7 @@ export const RemediationPlanRecordSchema = z.object({
 
   // Snapshot taken at plan-creation time, never re-derived implicitly later —
   // execution re-runs investigate() fresh and compares against exactly this.
+  remoteActionBinding: RemoteActionBindingSchema.nullish(),
   proposedCorrections: z.array(ProposedCorrectionSchema),
   verificationExpectations: z.array(VerificationExpectationSchema),
 

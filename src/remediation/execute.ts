@@ -10,6 +10,7 @@ import {
   type SystemOfRecordAdapter
 } from '@ledgerguard/core';
 import {
+  assertExecutionKeyOwnership,
   defaultExecutionKey,
   PostgresExecutionKeyStore,
   PostgresSystemOfRecordAdapter,
@@ -83,6 +84,7 @@ export async function executeRemediationPlan(
 
   const idempotencyKey = input.idempotencyKey ?? defaultExecutionKey(plan.id, input.expectedVersion);
   const existingKey = await keys.get(idempotencyKey);
+  if (existingKey) assertExecutionKeyOwnership(existingKey, { planId: plan.id, planVersion: input.expectedVersion });
 
   if (existingKey?.state === 'completed') {
     return reconcileCompletedExecution({

@@ -1,10 +1,15 @@
 /** Test-only JSON-2 helpers. Not part of the public @ledgerguard/odoo API. */
 
 export function liveConfig() {
+  if (process.env.LEDGERGUARD_ODOO_TEST_INSTANCE !== '1') return null;
   const baseUrl = process.env.ODOO_BASE_URL;
   const apiKey = process.env.ODOO_API_KEY;
   if (!baseUrl || !apiKey) {
     return null;
+  }
+  const url = new URL(baseUrl);
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || !['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('Mutating Odoo tests require a disposable loopback instance');
   }
   return { baseUrl: baseUrl.replace(/\/+$/, ''), database: process.env.ODOO_DATABASE, apiKey };
 }

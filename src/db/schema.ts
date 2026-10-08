@@ -173,6 +173,7 @@ export const remediationPlans = pgTable('remediation_plans', {
   state: text('state').notNull(),
   version: integer('version').notNull().default(1),
 
+  remoteActionBindingJson: text('remote_action_binding_json'),
   proposedCorrectionsJson: text('proposed_corrections_json').notNull(),
   verificationExpectationsJson: text('verification_expectations_json').notNull(),
 

@@ -1,0 +1,37 @@
+name: Independent evaluation feedback
+description: Share a reproducible synthetic integration or onboarding result
+title: '[Evaluation] '
+body:
+  - type: markdown
+    attributes:
+      value: 'Use synthetic data only. Remove credentials and private data. Follow SECURITY.md for vulnerability disclosures.'
+  - type: input
+    id: revision
+    attributes:
+      label: Commit SHA or release
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Node, pnpm, adapter and service versions. Do not paste secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Exact commands and minimal reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+      description: Include sanitized output and which safety invariant was exercised.
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: What was confusing or prevented evaluation?

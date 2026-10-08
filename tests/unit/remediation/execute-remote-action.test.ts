@@ -37,6 +37,7 @@ function planRecord(state: RemediationPlanRecord['state'], version: number): Rem
     requestedBy: 'tester',
     state,
     version,
+    remoteActionBinding: { systemId: 'odoo-19', systemType: 'odoo', actionJson: JSON.stringify(action()), expectedFingerprint: odooQuantFingerprint(DEMO_QUANT) },
     proposedCorrections: [
       {
         sequence: 1,
@@ -76,6 +77,7 @@ function toRow(plan: RemediationPlanRecord) {
     requestedBy: plan.requestedBy,
     state: plan.state,
     version: plan.version,
+    remoteActionBindingJson: plan.remoteActionBinding ? JSON.stringify(plan.remoteActionBinding) : null,
     proposedCorrectionsJson: JSON.stringify(plan.proposedCorrections),
     verificationExpectationsJson: JSON.stringify(plan.verificationExpectations),
     approvalAction: plan.approvalAction,
@@ -182,6 +184,38 @@ async function keys(expired = false) {
 }
 
 describe('executeRemoteConstrainedAction', () => {
+  it('rejects legacy approvals without an immutable remote action binding', async () => {
+    const legacy = planRecord('APPROVED', 2);
+    delete legacy.remoteActionBinding;
+    const { pool } = createPlanPool(legacy);
+    const odoo = new FakeOdoo(DEMO_QUANT);
+    await expect(executeRemoteConstrainedAction({
+      planId: 'plan-odoo-1', expectedVersion: 2, action: action(),
+      expectedFingerprint: odooQuantFingerprint(DEMO_QUANT), idempotencyKey: KEY
+    }, { pool, authority: testHarnessAuthority(), adapter: adapterFromTransport(odoo.transport),
+      executionKeys: new PostgresExecutionKeyStore(new MemoryKeys() as unknown as Queryable), now: () => NOW
+    })).rejects.toBeInstanceOf(ApprovalRequiredError);
+    expect(odoo.calls).toHaveLength(0);
+  });
+
+  it.each(['quantity', 'quant', 'fingerprint', 'system', 'recovery'])(
+    'rejects altered approved %s before any remote call', async (changed) => {
+      const { pool } = createPlanPool(planRecord(changed === 'recovery' ? 'EXECUTING' : 'APPROVED', changed === 'recovery' ? 3 : 2));
+      const odoo = new FakeOdoo(DEMO_QUANT);
+      const requested = action();
+      if (changed === 'quantity' || changed === 'recovery') requested.targetQuantity = 0;
+      if (changed === 'quant') { requested.quantId = 999; requested.target.resourceId = '999'; }
+      const store = changed === 'recovery' ? (await keys(true)).store : new PostgresExecutionKeyStore(new MemoryKeys() as unknown as Queryable);
+      await expect(executeRemoteConstrainedAction({
+        planId: 'plan-odoo-1', expectedVersion: 2, action: requested,
+        expectedFingerprint: changed === 'fingerprint' ? 'replacement' : odooQuantFingerprint(DEMO_QUANT), idempotencyKey: KEY
+      }, { pool, authority: testHarnessAuthority(), adapter: adapterFromTransport(odoo.transport, changed === 'system' ? 'other-odoo' : 'odoo-19'),
+        executionKeys: store, now: () => NOW
+      })).rejects.toBeInstanceOf(ApprovalRequiredError);
+      expect(odoo.calls).toHaveLength(0);
+    }
+  );
+
   it('rejects unapproved plans before any Odoo mutation', async () => {
     const { pool } = createPlanPool(planRecord('PENDING_APPROVAL', 2));
     const odoo = new FakeOdoo(DEMO_QUANT);

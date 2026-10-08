@@ -49,7 +49,7 @@ License: [Apache-2.0](LICENSE)
 
 ## Quickstart: one-command local demo
 
-Requires **Node.js 20+** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
+Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
@@ -68,6 +68,8 @@ Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
 ```
 
 This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use the PostgreSQL path below to exercise those.
+
+**Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
 
 **Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.md) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 

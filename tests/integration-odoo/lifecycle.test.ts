@@ -4,6 +4,7 @@ import { PostgresExecutionKeyStore, type Queryable } from '@ledgerguard/postgres
 import { inventoryAdjustmentAction, OdooInventoryAdapter, odooQuantFingerprint } from '@ledgerguard/odoo';
 import { executeRemoteConstrainedAction } from '../../src/remediation/execute-remote-action';
 import { testHarnessAuthority } from '../../src/remediation/trusted-authority';
+import { prepareRemoteActionBinding } from '../../src/remediation/remote-action-binding';
 import type { RemediationPlanRecord } from '../../src/remediation/types';
 import { liveConfig, seedDemoQuant } from '../../packages/odoo/test/live-bootstrap';
 
@@ -61,6 +62,7 @@ function toRow(plan: RemediationPlanRecord) {
     requestedBy: plan.requestedBy,
     state: plan.state,
     version: plan.version,
+    remoteActionBindingJson: plan.remoteActionBinding ? JSON.stringify(plan.remoteActionBinding) : null,
     proposedCorrectionsJson: JSON.stringify(plan.proposedCorrections),
     verificationExpectationsJson: JSON.stringify(plan.verificationExpectations),
     approvalAction: plan.approvalAction,
@@ -155,7 +157,10 @@ describe.skipIf(!config)('Odoo 19 control-plane lifecycle', () => {
       targetQuantity: 10,
       expectedWriteDate: seeded.writeDate
     });
-    const { pool, current } = createPlanPool(planRecord('APPROVED', 2));
+    const binding = await prepareRemoteActionBinding(adapter, action);
+    const plan = planRecord('APPROVED', 2);
+    plan.remoteActionBinding = binding;
+    const { pool, current } = createPlanPool(plan);
     const db = new MemoryKeys();
     const keys = new PostgresExecutionKeyStore(db as unknown as Queryable);
     const first = await executeRemoteConstrainedAction(
@@ -184,7 +189,7 @@ describe.skipIf(!config)('Odoo 19 control-plane lifecycle', () => {
         planId: 'plan-odoo-live',
         expectedVersion: 2,
         action,
-        expectedFingerprint: 'ignored',
+        expectedFingerprint: binding.expectedFingerprint,
         idempotencyKey: KEY
       },
       { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW }
@@ -205,7 +210,10 @@ describe.skipIf(!config)('Odoo 19 control-plane lifecycle', () => {
       targetQuantity: 10,
       expectedWriteDate: seeded.writeDate
     });
-    const { pool, current } = createPlanPool(planRecord('VERIFYING', 4));
+    const plan = planRecord('VERIFYING', 4);
+    plan.remoteActionBinding = { systemId: adapter.meta.systemId, systemType: adapter.meta.systemType,
+      actionJson: JSON.stringify(action), expectedFingerprint: 'stale-approved' };
+    const { pool, current } = createPlanPool(plan);
     const db = new MemoryKeys();
     const keys = new PostgresExecutionKeyStore(db as unknown as Queryable);
     await keys.reserve({

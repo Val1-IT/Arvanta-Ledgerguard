@@ -7,7 +7,7 @@ import {
   type SystemOfRecordAdapter,
   type SystemOfRecordSession
 } from '@ledgerguard/core';
-import { PostgresExecutionKeyStore, type Queryable } from '@ledgerguard/postgres';
+import { ExecutionKeyConflictError, PostgresExecutionKeyStore, type Queryable } from '@ledgerguard/postgres';
 import { ConcurrentExecutionError } from '@ledgerguard/policy';
 import { executeRemediationPlan } from '../../../src/remediation/execute';
 import { testHarnessAuthority } from '../../../src/remediation/trusted-authority';
@@ -254,6 +254,20 @@ describe('crash-window execution recovery', () => {
     expect(mutationCount()).toBe(0);
   });
 
+  it('rejects a foreign completed key before reconciling the plan', async () => {
+    const { pool } = createPlanPool(planRecord('APPROVED', 2));
+    const { db, keys } = await reservedStore(true);
+    const row = db.rows.get(KEY)!;
+    row.planId = 'another-plan';
+    row.state = 'completed';
+    const { adapter, mutationCount } = trackingAdapter(repairedSnapshot());
+    await expect(executeRemediationPlan(
+      { planId: 'plan-dup-1', expectedVersion: 2, idempotencyKey: KEY },
+      { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW }
+    )).rejects.toBeInstanceOf(ExecutionKeyConflictError);
+    expect(mutationCount()).toBe(0);
+  });
+
   it('B: EXECUTING + expired reserved + original incident becomes INTERRUPTED and can resume once', async () => {
     const { pool, current } = createPlanPool(planRecord('EXECUTING', 3));
     const { db, keys } = await reservedStore(true);
@@ -305,7 +319,7 @@ describe('crash-window execution recovery', () => {
     expect(mutations).toBe(0);
 
     const resumed = await executeRemediationPlan(
-      { planId: 'plan-dup-1', expectedVersion: current().version, idempotencyKey: KEY },
+      { planId: 'plan-dup-1', expectedVersion: current().version },
       { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => NOW }
     );
     expect(resumed.outcome).toBe('EXECUTED');

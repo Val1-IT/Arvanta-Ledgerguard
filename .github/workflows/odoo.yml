@@ -38,6 +38,7 @@ jobs:
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
       - name: Live JSON-2 and control-plane tests
         env:
+          LEDGERGUARD_ODOO_TEST_INSTANCE: '1'
           ODOO_BASE_URL: http://127.0.0.1:8069
           ODOO_DATABASE: odoo
           ODOO_API_KEY: ${{ steps.bootstrap.outputs.key }}
