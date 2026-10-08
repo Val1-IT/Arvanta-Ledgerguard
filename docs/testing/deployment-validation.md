@@ -72,13 +72,18 @@ procedure, not a promise of bit-for-bit image reproducibility.
    restarting the app process; schema/data must remain unchanged.
 8. The app container is replaced with the previous image against the same volume.
    The DB-backed routes must still pass, and schema/data must remain identical.
-9. Only this run's randomly named containers, network, volume, and image tags are
+9. The candidate is deployed again after that rollback; readiness, all three
+   candidate routes, and identical schema/data must still pass.
+10. Only this run's randomly named containers, network, volume, and image tags are
    deleted. A failed cleanup makes the script fail. The ephemeral GitHub runner
    also removes this workflow's labeled resources after interruption.
 
 The script prints `DEPLOYMENT SMOKE PASS` only after the checks and cleanup succeed. It uses
 `pg_dump` to compare schema and rows, stripping only the random PostgreSQL dump
-restriction markers. It never restores a dump, truncates an existing database,
+restriction markers, including the final marker when captured output has no
+trailing newline. All remaining bytes are compared exactly. On a mismatch the
+script reports the first differing line/column, bounded synthetic-data excerpts,
+and complete dump hashes rather than printing the whole database. It never restores a dump, truncates an existing database,
 or runs a down-migration. Seeding is never part of a real upgrade or rollback.
 
 ## Reading the result honestly

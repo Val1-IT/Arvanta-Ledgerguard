@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertMatchingMigrations,
+  assertDatabaseUnchanged,
   assertLocalDockerEnvironment,
   assertLocalDockerEndpoint,
   assertSmokePage,
@@ -133,6 +134,37 @@ describe('isolated deployment validation guards', () => {
     expect(calls).toContainEqual(['container', 'rm', '--force', 'owned-app']);
     expect(calls).toContainEqual(['volume', 'rm', 'owned-db']);
     expect(calls.some((args) => args.includes('prune'))).toBe(false);
+  });
+
+  it('removes pg_dump restriction markers after command capture trims the final newline', () => {
+    for (const newline of ['\n', '\r\n']) {
+      const before = ['-- dump', '\\restrict tokenBefore', 'CREATE TABLE x(id integer);',
+        'INSERT INTO x VALUES (1);', '\\unrestrict tokenBefore', ''].join(newline);
+      const after = before.replaceAll('tokenBefore', 'tokenAfter');
+      expect(normalizeDatabaseDump(before.trim())).toBe(normalizeDatabaseDump(after.trim()));
+      expect(normalizeDatabaseDump(before)).toBe(normalizeDatabaseDump(after));
+      expect(normalizeDatabaseDump(before.trim())).not.toContain('tokenBefore');
+      expect(normalizeDatabaseDump(before.trim())).not.toBe(normalizeDatabaseDump(after.replace('(1)', '(2)').trim()));
+      expect(normalizeDatabaseDump(before.trim())).not.toBe(normalizeDatabaseDump(after.replace('id integer', 'id text').trim()));
+    }
+  });
+
+  it('reports the first actual schema/data difference without logging whole dumps', () => {
+    const prefix = Array.from({ length: 600 }, (_, i) => `-- unchanged line ${i}`).join('\n');
+    const expected = `${prefix}\nINSERT INTO x VALUES ('${'a'.repeat(800)}', 1);\n-- end`;
+    const actual = expected.replace("', 1)", "', 2)");
+    expect(() => assertDatabaseUnchanged(expected, expected, 'migration replay')).not.toThrow();
+    let message = '';
+    try { assertDatabaseUnchanged(actual, expected, 'migration replay'); } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('migration replay changed the database schema or seeded rows');
+    expect(message).toContain('line 601');
+    expect(message).toContain("', 1)");
+    expect(message).toContain("', 2)");
+    expect(message).not.toContain('-- unchanged line');
+    expect(message.length).toBeLessThan(900);
+    expect(() => assertDatabaseUnchanged('same\nextra', 'same', 'append')).toThrow(/<EOF>/);
   });
 
   it('ignores only pg_dump random restriction markers when comparing data', () => {

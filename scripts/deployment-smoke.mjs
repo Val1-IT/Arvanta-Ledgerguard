@@ -9,7 +9,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
-  assertMatchingMigrations, assertLocalDockerEnvironment, assertLocalDockerEndpoint, assertSmokePage, assertRuntimeInventory, assertReadiness, normalizeDatabaseDump, rejectEnvironmentFiles
+  assertMatchingMigrations, assertDatabaseUnchanged, assertLocalDockerEnvironment, assertLocalDockerEndpoint, assertSmokePage, assertRuntimeInventory, assertReadiness, normalizeDatabaseDump, rejectEnvironmentFiles
 } from './deployment-smoke-checks.mjs';
 
 import { cleanupDockerResources } from './deployment-smoke-cleanup.mjs';
@@ -145,7 +145,7 @@ function assertPrivate(name) {
   assert(Object.values(bindings ?? {}).every((value) => value === null), `${name} exposes a host port`);
 }
 function assertUnchanged(expected, stage) {
-  assert.equal(dump(), expected, `${stage} changed the database schema or seeded rows`);
+  assertDatabaseUnchanged(dump(), expected, stage);
   console.log(`PASS: ${stage}: schema and data unchanged.`);
 }
 
@@ -224,6 +224,11 @@ try {
   start(baselineImage);
   await checkApp('previous-image rollback on unchanged schema');
   assertUnchanged(seeded, 'previous-image rollback');
+  docker(['rm', '--force', app]);
+  start(candidateImage);
+  assertPrivate(app);
+  await checkApp('candidate redeployment after rollback', true);
+  assertUnchanged(seeded, 'candidate redeployment after rollback');
   validated = true;
 } catch (error) {
   console.error(error.message);
@@ -236,6 +241,6 @@ try {
 }
 
 if (validated && !process.exitCode) {
-  console.log('DEPLOYMENT SMOKE PASS: isolated startup, migration replay, restart, and application-only rollback; owned resources cleaned up.');
+  console.log('DEPLOYMENT SMOKE PASS: isolated startup, migration replay, restart, application-only rollback, and candidate redeployment; owned resources cleaned up.');
   console.log('This is not production authentication, ERP integration, down-migration, or backup/restore evidence.');
 }

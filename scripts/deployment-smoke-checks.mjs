@@ -47,7 +47,8 @@ export function assertSmokePage(path, status, body) {
 }
 
 export function normalizeDatabaseDump(dump) {
-  return dump.replace(/^\\(?:un)?restrict \S+\r?\n/gm, '');
+  // command() trims captured stdout, so the final marker may end at EOF.
+  return dump.replace(/^\\(?:un)?restrict \S+(?:\r?\n|$)/gm, '');
 }
 
 export function assertRuntimeInventory(inventory) {
@@ -73,4 +74,25 @@ export function assertLocalDockerEndpoint(endpoint) {
   const localWindowsPipe = typeof endpoint === 'string' && /^npipe:\/\/\/\/\.\/pipe\/[A-Za-z0-9_.-]+$/.test(endpoint);
   assert(localUnixSocket || localWindowsPipe,
     'Selected Docker endpoint must be a local Unix socket or local Windows named pipe.');
+}
+
+/** Exact equality, with bounded diagnostics for this harness's synthetic data only. */
+export function assertDatabaseUnchanged(actual, expected, stage) {
+  if (actual === expected) return;
+  const actualLines = actual.split('\n');
+  const expectedLines = expected.split('\n');
+  let line = 0;
+  while (line < Math.min(actualLines.length, expectedLines.length) && actualLines[line] === expectedLines[line]) line++;
+  const actualLine = actualLines[line];
+  const expectedLine = expectedLines[line];
+  let column = 0;
+  while (column < Math.min(actualLine?.length ?? 0, expectedLine?.length ?? 0) && actualLine[column] === expectedLine[column]) column++;
+  const start = Math.max(0, column - 60);
+  const end = column + 100;
+  const excerpt = (value) => value === undefined ? '<EOF>' : JSON.stringify(
+    `${start ? '…' : ''}${value.slice(start, end)}${value.length > end ? '…' : ''}`);
+  const hash = (value) => createHash('sha256').update(value).digest('hex');
+  throw new Error(`${stage} changed the database schema or seeded rows at line ${line + 1}, column ${column + 1}.\n` +
+    `Expected: ${excerpt(expectedLine)}\nActual: ${excerpt(actualLine)}\n` +
+    `Expected SHA-256: ${hash(expected)}\nActual SHA-256: ${hash(actual)}`);
 }
