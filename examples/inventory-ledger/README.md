@@ -2,6 +2,8 @@
 
 This example proves LedgerGuard can handle a second incident type without DataHub and without a parallel execution stack.
 
+In containers and CI images, `corepack enable` may fail until `COREPACK_HOME` is a writable path (for example `export COREPACK_HOME=/tmp/corepack`). The repo pins pnpm **9.15.9**; pnpm 10 is untested.
+
 ## Before
 
 | Record | Quantity |
@@ -30,11 +32,52 @@ evidence → policy (`REQUIRE_APPROVAL` above threshold) → trusted authority �
 In-memory harness (no Docker):
 
 ```
+pnpm demo
+# or, after a full install:
 pnpm scenario:duplicate-inventory:memory
 ```
 
-PostgreSQL (after `pnpm db:migrate && pnpm db:seed`):
+Pass `--quiet` (or `LEDGERGUARD_DEMO_QUIET=1`) to skip the JSON dumps and keep the DEMO PASS summary.
+
+PostgreSQL (Docker or an already-running demo database):
 
 ```
-pnpm scenario:duplicate-inventory
+pnpm demo:pg
 ```
+
+## Where your agent plugs in
+
+The agent never sends SQL and never self-approves. It produces a snapshot; LedgerGuard decides:
+
+```ts
+import { investigate, executeConstrainedRemediation } from '@ledgerguard/core';
+import { Capability, evaluateExecutionPolicy, trustedRuntimeAuthority } from '@ledgerguard/policy';
+
+const report = investigate(snapshot); // typed proposal; the agent does not write
+const authority = trustedRuntimeAuthority({
+  actorId: 'controller',
+  actorType: 'human',
+  capabilities: [Capability.remediationExecute, Capability.remediationApprove]
+});
+const policyInput = {
+  evidenceCount: report.evidence.length,
+  verificationExpectationCount: report.verificationExpectations.length,
+  impactAmount: Number(report.financialImpact.primaryExposure),
+  authority,
+  expectedVersion: 1,
+  config: { financialApprovalThreshold: 1000, currency: 'IDR' },
+  idempotencyCompleted: false
+};
+evaluateExecutionPolicy({ ...policyInput, plan: { state: 'DRAFT', version: 1, approvalAction: null, approvedBy: null } });
+// REQUIRE_APPROVAL until a human approves this exact plan version
+const allowed = evaluateExecutionPolicy({
+  ...policyInput,
+  expectedVersion: 2,
+  plan: { state: 'APPROVED', version: 2, approvalAction: 'APPROVE', approvedBy: 'controller' }
+});
+if (allowed.outcome === 'ALLOW') {
+  await executeConstrainedRemediation(adapter, { approvedCorrections: report.proposedCorrections });
+}
+```
+
+To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](../../docs/try-on-your-own-table.md).

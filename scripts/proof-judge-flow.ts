@@ -77,7 +77,7 @@ async function main(): Promise<void> {
       throw new Error(`Live DataHub resolution write-back did not sync: ${synced.datahubWriteback?.message ?? 'unknown failure'}`);
     }
 
-    const outputDir = path.join(root, 'examples', 'judge-proof');
+    const outputDir = path.join(root, 'docs', 'archive', 'hackathon', 'judge-proof');
     await mkdir(outputDir, { recursive: true });
     const activity = investigation.output.activityLog.map((entry) => ({
       ...entry,
@@ -96,11 +96,11 @@ async function main(): Promise<void> {
       remediationState: synced.state,
       verificationStatus: synced.verification?.result.overallStatus ?? 'FAIL',
       datahubWritebackStatus: synced.datahubWriteback.outcome,
-      activityLogPath: 'examples/judge-proof/mcp-activity-log.jsonl'
+      activityLogPath: 'docs/archive/hackathon/judge-proof/mcp-activity-log.jsonl'
     };
     await writeFile(path.join(outputDir, 'live-flow-proof.json'), `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
     await writeFile(path.join(outputDir, 'mcp-activity-log.jsonl'), `${activity.map((entry) => JSON.stringify(entry)).join('\n')}\n`, 'utf8');
-    console.log('Live judge proof completed. Sanitized artifacts written to examples/judge-proof/.');
+    console.log('Live judge proof completed. Sanitized artifacts written to docs/archive/hackathon/judge-proof/.');
   } finally {
     await pool.end();
   }

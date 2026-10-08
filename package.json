@@ -13,7 +13,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "demo": "pnpm install --frozen-lockfile --prod=false && pnpm run scenario:duplicate-inventory:memory",
+    "demo": "node scripts/run-memory-demo.mjs",
+    "demo:pg": "node scripts/run-postgres-demo.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

@@ -1,0 +1,23 @@
+{
+  "name": "@ledgerguard/example-inventory-ledger",
+  "version": "0.2.0",
+  "private": true,
+  "description": "In-memory duplicate-inventory demo. No Next.js, Docker, or database.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "demo": "tsx src/run.ts"
+  },
+  "dependencies": {
+    "@ledgerguard/core": "workspace:*",
+    "@ledgerguard/policy": "workspace:*",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

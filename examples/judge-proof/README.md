@@ -1,3 +1,6 @@
-# Judge proof artifacts
+# Moved
 
-`npm run proof:judge-flow` writes sanitized live artifacts here only after the full judge-mode flow completes. The repository intentionally does not ship a fabricated success artifact.
+Hackathon judge-proof artifacts live in
+[docs/archive/hackathon/judge-proof/](../../docs/archive/hackathon/judge-proof/).
+
+`pnpm proof:judge-flow` still exists; it now writes sanitized live artifacts to that archive directory. The scripts were not retired.

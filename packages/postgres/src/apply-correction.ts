@@ -5,7 +5,10 @@ import {
   type CorrectionStepResult,
   type ProposedCorrection
 } from '@ledgerguard/core';
-import { isWritableColumn, TOUCH_TIMESTAMP_COLUMN } from './allowlist';
+import {
+  type AllowlistConfig,
+  resolveAllowlist
+} from './allowlist';
 import type { Queryable } from './queryable';
 import { fetchJournalEntries } from './repositories/journals';
 
@@ -16,11 +19,20 @@ export class UnallowlistedMutationError extends Error {
   }
 }
 
+export interface ApplyCorrectionOptions {
+  cogsAccountCode?: string;
+  /**
+   * Omit for demo inventory defaults. Pass `null` or `{ writableColumns: {} }`
+   * to fail closed. A non-empty config replaces the demo tables entirely.
+   */
+  allowlist?: AllowlistConfig | null;
+}
+
 export async function applyAllowlistedCorrection(
   client: Queryable,
   correction: ProposedCorrection,
   now: Date,
-  options: { cogsAccountCode?: string } = {}
+  options: ApplyCorrectionOptions = {}
 ): Promise<CorrectionStepResult> {
   const base = {
     sequence: correction.sequence,
@@ -28,6 +40,7 @@ export async function applyAllowlistedCorrection(
     table: correction.table,
     recordId: correction.recordId
   };
+  const allowlist = resolveAllowlist(options.allowlist);
 
   if (correction.action === 'RECONCILE_JOURNAL_ENTRIES') {
     const entries = await fetchJournalEntries(client);
@@ -42,7 +55,7 @@ export async function applyAllowlistedCorrection(
   }
 
   if (correction.action === 'REVERSE_INVENTORY_MOVEMENT') {
-    if (!isWritableColumn('inventory_movements', 'reversed_at')) {
+    if (!allowlist.writableColumns.inventory_movements?.has('reversed_at')) {
       throw new UnallowlistedMutationError(correction.table, correction.field, correction.action);
     }
     const { rowCount } = await client.query(
@@ -63,11 +76,11 @@ export async function applyAllowlistedCorrection(
     };
   }
 
-  if (!isWritableColumn(correction.table, correction.field)) {
+  if (!allowlist.writableColumns[correction.table]?.has(correction.field)) {
     throw new UnallowlistedMutationError(correction.table, correction.field, correction.action);
   }
 
-  const touchColumn = TOUCH_TIMESTAMP_COLUMN[correction.table];
+  const touchColumn = allowlist.touchTimestamps[correction.table];
   const setClauses = [`${correction.field} = $1::numeric`];
   const params: unknown[] = [correction.afterValue];
   if (touchColumn) {

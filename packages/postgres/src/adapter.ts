@@ -5,6 +5,7 @@ import {
 } from '@ledgerguard/core';
 import type { Pool, PoolClient } from 'pg';
 import { applyAllowlistedCorrection } from './apply-correction';
+import type { AllowlistConfig } from './allowlist';
 import type { Queryable } from './queryable';
 import { loadInvestigationInput } from './repositories/investigation';
 
@@ -12,12 +13,18 @@ export interface PostgresSystemOfRecordAdapterOptions {
   cogsAccountCode?: string;
   systemId?: string;
   beforeCommit?: (client: Queryable, result: unknown) => Promise<void>;
+  /**
+   * Writable-column allowlist. Omit for the demo inventory tables.
+   * Pass `null` or `{ writableColumns: {} }` to fail closed (no writes).
+   */
+  allowlist?: AllowlistConfig | null;
 }
 
 class PostgresSession implements SystemOfRecordSession {
   constructor(
     private readonly client: PoolClient,
-    private readonly cogsAccountCode: string
+    private readonly cogsAccountCode: string,
+    private readonly allowlist?: AllowlistConfig | null
   ) {}
 
   async loadInvestigationInput() {
@@ -26,7 +33,8 @@ class PostgresSession implements SystemOfRecordSession {
 
   async applyCorrection(correction: Parameters<SystemOfRecordSession['applyCorrection']>[0], now: Date) {
     return applyAllowlistedCorrection(this.client, correction, now, {
-      cogsAccountCode: this.cogsAccountCode
+      cogsAccountCode: this.cogsAccountCode,
+      allowlist: this.allowlist
     });
   }
 }
@@ -39,6 +47,7 @@ export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
   };
   private readonly cogsAccountCode: string;
   private readonly beforeCommit?: (client: Queryable, result: unknown) => Promise<void>;
+  private readonly allowlist?: AllowlistConfig | null;
 
   constructor(
     private readonly pool: Pool,
@@ -46,6 +55,7 @@ export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
   ) {
     this.cogsAccountCode = options.cogsAccountCode ?? CONVERSION_MISMATCH_EXAMPLE.cogsAccountCode;
     this.beforeCommit = options.beforeCommit;
+    this.allowlist = options.allowlist;
     this.meta = {
       systemId: options.systemId ?? 'postgres-inventory-ledger',
       systemType: 'postgres',
@@ -57,7 +67,7 @@ export class PostgresSystemOfRecordAdapter implements SystemOfRecordAdapter {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const result = await work(new PostgresSession(client, this.cogsAccountCode));
+      const result = await work(new PostgresSession(client, this.cogsAccountCode, this.allowlist));
       if (this.beforeCommit) {
         await this.beforeCommit(client, result);
       }
