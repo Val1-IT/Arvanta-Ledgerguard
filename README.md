@@ -51,7 +51,9 @@ License: [Apache-2.0](LICENSE)
 
 ## Quickstart: one-command local demo
 
-Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
+Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows.
+
+In containers/CI images `corepack enable` may fail until COREPACK_HOME is writable (e.g. `export COREPACK_HOME=/tmp/corepack`). The repo pins pnpm 9.15.9; pnpm 10 is untested.
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
@@ -59,7 +61,7 @@ cd Arvanta-Ledgerguard
 pnpm demo
 ```
 
-`pnpm demo` installs the locked dependencies (including development tools), then runs the duplicate-inventory scenario with the real core and policy packages against a fresh in-memory fixture. The first install needs access to the npm registry. No Docker, `.env`, database, DataHub, or model API key is needed. Existing environment files and databases are not read or changed by the scenario. Reruns start from fresh synthetic data.
+`pnpm demo` installs only `tsx`, `decimal.js` and `zod` into `examples/inventory-ledger` (on the order of tens of MB, not the Next.js workspace), then runs the duplicate-inventory scenario with the real core and policy packages against a fresh in-memory fixture. The first install needs access to the npm registry. No Docker, `.env`, database, DataHub, or model API key is needed. Existing environment files and databases are not read or changed by the scenario. Reruns start from fresh synthetic data. Pass `--quiet` (or `LEDGERGUARD_DEMO_QUIET=1`) to skip the JSON dumps and keep the DEMO PASS summary. Postgres/Docker is needed only for `pnpm demo:pg` and the web UI.
 
 The demo shows evidence, a proposed repair, `REQUIRE_APPROVAL`, a **simulated human approval**, and verified execution. It exits nonzero if any expected result fails. Successful output ends with:
 
@@ -67,15 +69,25 @@ The demo shows evidence, a proposed repair, `REQUIRE_APPROVAL`, a **simulated hu
 DEMO PASS: duplicate detected; approval required; repair verified.
 Quantity: 20.000 -> 10.000 | Valuation: 1700000.00 -> 850000.00
 Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
+In-memory demonstration only; persisted idempotency and SQL transactions need the PostgreSQL integration path.
+
+---------- DEMO SUMMARY ----------
+Result: DEMO PASS
+Incident: DUPLICATE_INVENTORY_MOVEMENT
+Policy: REQUIRE_APPROVAL → ALLOW (simulated human approval of plan v2)
+Execute: committed, verification PASS
+Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
+Quantity: 20.000 → 10.000 | Valuation: 1700000.00 → 850000.00
+----------------------------------
 ```
 
-This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use the PostgreSQL path below to exercise those.
+This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use `pnpm demo:pg` below to exercise those.
 
 **Integrating an existing service?** Start with the [adoption tutorial](docs/integrations/adoption-tutorial.md) for adapter boundaries, persisted approval, outcomes, and runnable reference tests.
 
 **Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
 
-**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
+**Trying LedgerGuard?** After `pnpm demo`, try [`pnpm demo:pg`](#postgresql-demo-optional-datahub-not-required) (Docker) or point the adapter at your own table with [try-on-your-own-table](docs/try-on-your-own-table.md). [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) or [file a tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 
 ### Manual fallback: same in-memory demo
 
@@ -90,7 +102,17 @@ If installation fails, check registry/network access and the Node/pnpm versions,
 
 ### PostgreSQL demo (optional, DataHub not required)
 
-Also requires Docker running with Compose available. Use only the disposable demo database: seeding replaces its synthetic data. No `.env` copy is needed. In a new terminal, explicitly select the local Compose database before running the remaining commands; this takes precedence over a `DATABASE_URL` in `.env`.
+Requires Docker running with Compose available. The in-memory `pnpm demo` above needs no Docker, `.env`, or database; Postgres/Docker is only for this path and the web UI. Use only the disposable demo database: seeding replaces its synthetic data. No `.env` copy is needed.
+
+```bash
+pnpm demo:pg
+```
+
+`pnpm demo:pg` uses `DATABASE_URL` if set, otherwise `postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard` (Compose maps host 5433 → container 5432).
+
+#### Manual fallback: same PostgreSQL demo
+
+Use separate steps to diagnose a Compose/database failure. In a new terminal, explicitly select the local Compose database before running the remaining commands; this takes precedence over a `DATABASE_URL` in `.env`.
 
 macOS/Linux:
 
@@ -120,8 +142,6 @@ pnpm scenario:conversion-error
 pnpm db:seed
 pnpm scenario:duplicate-inventory
 ```
-
-`DATABASE_URL` defaults to `postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard` (Compose maps host 5433 → container 5432).
 
 Release checks without Docker:
 
@@ -177,12 +197,49 @@ The Next.js app under `app/` is a demo shell, not the runtime.
 
 See [docs/architecture/execution-integrity.md](docs/architecture/execution-integrity.md), [docs/architecture/authority-model.md](docs/architecture/authority-model.md) and [docs/threat-model.md](docs/threat-model.md).
 
-## Known v0.2 limitations
+## Where your agent plugs in
+
+The agent never sends SQL and never self-approves. It produces a snapshot; LedgerGuard decides:
+
+```ts
+import { investigate, executeConstrainedRemediation } from '@ledgerguard/core';
+import { Capability, evaluateExecutionPolicy, trustedRuntimeAuthority } from '@ledgerguard/policy';
+
+const report = investigate(snapshot); // typed proposal; the agent does not write
+const authority = trustedRuntimeAuthority({
+  actorId: 'controller',
+  actorType: 'human',
+  capabilities: [Capability.remediationExecute, Capability.remediationApprove]
+});
+const policyInput = {
+  evidenceCount: report.evidence.length,
+  verificationExpectationCount: report.verificationExpectations.length,
+  impactAmount: Number(report.financialImpact.primaryExposure),
+  authority,
+  expectedVersion: 1,
+  config: { financialApprovalThreshold: 1000, currency: 'IDR' },
+  idempotencyCompleted: false
+};
+evaluateExecutionPolicy({ ...policyInput, plan: { state: 'DRAFT', version: 1, approvalAction: null, approvedBy: null } });
+// REQUIRE_APPROVAL until a human approves this exact plan version
+const allowed = evaluateExecutionPolicy({
+  ...policyInput,
+  expectedVersion: 2,
+  plan: { state: 'APPROVED', version: 2, approvalAction: 'APPROVE', approvedBy: 'controller' }
+});
+if (allowed.outcome === 'ALLOW') {
+  await executeConstrainedRemediation(adapter, { approvedCorrections: report.proposedCorrections });
+}
+```
+
+The same snippet lives in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md).
+
+## Known limitations (v0.3, pre-1.0)
 
 - **Demo authority.** The demo mints `incident-ui` with full capabilities in server code. There is no production authentication.
 - **Not exactly-once.** PostgreSQL same-database atomicity closes the post-COMMIT reserved-key window. Other adapters and ambiguous expired reservations are not exactly-once.
 - **Detector precedence.** Conversion mismatch wins if both incidents exist. Simultaneous root causes are not aggregated.
-- **Adapter scope.** PostgreSQL remains the transactional reference adapter. Odoo 19 support is experimental: one `stock.quant` inventory adjustment via JSON-2. See [docs/integrations/odoo.md](docs/integrations/odoo.md).
+- **Adapter scope.** PostgreSQL remains the transactional reference adapter. Odoo 19 support is experimental and opt-in: one `stock.quant` inventory adjustment via JSON-2. See [docs/integrations/odoo.md](docs/integrations/odoo.md).
 
 ## Development
 
