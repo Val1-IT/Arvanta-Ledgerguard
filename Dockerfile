@@ -4,16 +4,15 @@
 # docker-compose.demo.yml and docs/deployment.md); this image does not bundle
 # or start either.
 
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+RUN npm install --global pnpm@9.15.9
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages ./packages
+RUN pnpm install --frozen-lockfile
 COPY . .
-RUN npm run build
+# The app currently has no public assets; retain a valid optional assets path.
+RUN mkdir -p public && pnpm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app

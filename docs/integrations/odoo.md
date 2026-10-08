@@ -126,3 +126,45 @@ pnpm exec vitest run --config vitest.odoo.config.ts
 Only loopback hosts are accepted by the test harness. This is an accidental-target
 safety guard, not proof that a local proxy cannot reach production. Confirm the
 instance is disposable yourself. The adapter itself is not restricted to loopback.
+
+## Opt-in atomic addon (experimental)
+
+The repository includes `addons/ledgerguard_inventory`, an optional Odoo 19
+Community addon. It exposes only two constrained methods on `stock.quant`:
+`ledgerguard_apply_inventory` and the read-only `ledgerguard_inventory_status`.
+Install it only in a disposable evaluation instance first. The supplied Compose
+bootstrap installs it and runs server-side tests before starting JSON-2.
+
+```ts
+const adapter = new OdooInventoryAdapter(config, {
+  systemId: 'unique-trusted-odoo-instance',
+  executionMode: 'atomic-addon'
+});
+```
+
+In this mode there is no fallback to separate `write` / `action_apply_inventory`
+requests. The addon checks the authenticated inventory manager's current ACLs and
+record rules, locks the exact quant, checks the approved identity and pre-state,
+applies the count, verifies it, and inserts an action receipt in the same Odoo
+transaction. An exception rolls back that transaction. The adapter still re-reads
+for independent verification; the LedgerGuard control plane remains a separate
+database (`nativeTransactions: false`).
+
+The endpoint requires a non-superuser inventory manager. It rejects tracked,
+lot/package/owner-specific quants, non-internal locations, and pending counts.
+Arbitrary caller context flags are discarded. Scope is deliberately narrower
+than general Odoo inventory adjustment. Receipts are inaccessible through ORM
+CRUD endpoints and deduplicate an identical normalized approved action per Odoo
+user, including its expected write date. They do not deduplicate across users or
+plan IDs. Recovery uses receipt provenance, not quantity alone. Receipt history
+is retained across addon uninstall/reinstall and is not automatically pruned.
+
+Limits remain: only the exact quant is locked, other quants may be created by
+concurrent stock activity, wire-format `write_date` is second-precision, and
+Odoo's stock internals retain their own existing maintenance privilege behavior.
+Do not infer a system-wide inventory lock or production readiness.
+
+The dedicated Odoo CI job executes the addon TransactionCase suite and then the
+legacy and atomic JSON-2 live suites sequentially on synthetic fixtures. Review
+that job for the exact commit; offline TypeScript/Python tests alone do not prove
+Odoo runtime compatibility.

@@ -1,4 +1,4 @@
-import type { ConstrainedAction } from '@ledgerguard/core';
+import type { AdapterCapabilities, ConstrainedAction } from '@ledgerguard/core';
 
 export interface OdooConnectionConfig {
   baseUrl: string;
@@ -36,3 +36,16 @@ export type OdooJson2Transport = (
   method: string,
   body: Record<string, unknown>
 ) => Promise<unknown>;
+
+/** Atomic mode requires the separately installed ledgerguard_inventory Odoo 19 addon. */
+export type OdooExecutionMode = 'experimental-json2' | 'atomic-addon';
+export interface OdooAdapterOptions {
+  systemId?: string;
+  executionMode?: OdooExecutionMode;
+}
+export interface OdooAdapterCapabilities extends AdapterCapabilities {
+  /** Only the inventory operation is atomic inside Odoo, not the control-plane transaction. */
+  atomicInventoryAction: boolean;
+  /** Identical normalized approved actions are deduplicated per authenticated Odoo user. */
+  durableActionReceipts: boolean;
+}

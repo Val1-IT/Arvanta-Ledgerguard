@@ -38,6 +38,8 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Audit runtime dependency advisories
+        run: pnpm audit --prod --audit-level=high
       - name: Typecheck
         run: pnpm run typecheck
       - name: Lint
@@ -81,3 +83,13 @@ jobs:
         run: pnpm run db:migrate
       - name: Integration tests
         run: pnpm run test:integration
+
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the pnpm workspace production image
+        run: docker build --tag ledgerguard:ci .
+      - name: Verify standalone server exists in the image
+        run: docker run --rm ledgerguard:ci node --check server.js

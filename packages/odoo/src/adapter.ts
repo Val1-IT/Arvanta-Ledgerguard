@@ -4,10 +4,14 @@ import {
   type ConstrainedActionAdapter,
   type StaleReservationClassification
 } from '@ledgerguard/core';
-import { INVENTORY_MODE_CONTEXT, ODOO_JSON2_METHODS, ODOO_JSON2_MODEL, QUANT_READ_FIELDS } from './allowlist';
+import { INVENTORY_MODE_CONTEXT, ODOO_ATOMIC_METHODS, ODOO_JSON2_METHODS, ODOO_JSON2_MODEL, QUANT_READ_FIELDS } from './allowlist';
+import { atomicRequest, isBoundAtomicResponse, isCanonicalOdooDatetime, isVerifiedAtomicReceipt } from './atomic-protocol';
 import { odooQuantFingerprint, parseQuantRecord, quantitiesEqual } from './fingerprint';
 import { createJson2Transport, guardedTransport } from './json2-client';
 import type {
+  OdooAdapterCapabilities,
+  OdooAdapterOptions,
+  OdooExecutionMode,
   OdooConnectionConfig,
   OdooInventoryAdjustmentAction,
   OdooJson2Transport,
@@ -27,17 +31,24 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
     systemId: string;
     systemType: 'odoo';
     adapterVersion: string;
-    capabilities: typeof ODOO_CAPABILITIES;
+    capabilities: OdooAdapterCapabilities;
   };
+  private readonly executionMode: OdooExecutionMode;
   private readonly transport: OdooJson2Transport;
 
-  constructor(config: OdooConnectionConfig, options: { systemId?: string } = {}) {
-    this.transport = guardedTransport(createJson2Transport(config));
+  constructor(config: OdooConnectionConfig, options: OdooAdapterOptions = {}) {
+    this.executionMode = options.executionMode ?? 'experimental-json2';
+    if (!['experimental-json2', 'atomic-addon'].includes(this.executionMode)) throw new Error('Invalid Odoo execution mode');
+    this.transport = guardedTransport(createJson2Transport(config, this.executionMode), this.executionMode);
     this.meta = {
       systemId: options.systemId ?? 'odoo-19',
       systemType: 'odoo',
       adapterVersion: ODOO_ADAPTER_VERSION,
-      capabilities: ODOO_CAPABILITIES
+      capabilities: {
+        ...ODOO_CAPABILITIES,
+        atomicInventoryAction: this.executionMode === 'atomic-addon',
+        durableActionReceipts: this.executionMode === 'atomic-addon'
+      }
     };
   }
 
@@ -63,6 +74,16 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
 
   async validate(action: ConstrainedAction): Promise<{ ok: true } | { ok: false; reason: string }> {
     const validated = validateInventoryAdjustmentAction(action);
+    if (validated.ok && this.executionMode === 'atomic-addon') {
+      const inventory = validated.action;
+      if (!isCanonicalOdooDatetime(inventory.expectedWriteDate)) {
+        return { ok: false, reason: 'atomic mode requires a canonical Odoo UTC datetime' };
+      }
+      if (![inventory.quantId, inventory.productId, inventory.locationId, inventory.companyId ?? 1].every(Number.isSafeInteger) ||
+          [inventory.expectedQuantity, inventory.targetQuantity].some((value) => Math.abs(value) > Number.MAX_SAFE_INTEGER)) {
+        return { ok: false, reason: 'atomic mode requires safely representable inventory numbers' };
+      }
+    }
     return validated.ok ? { ok: true } : { ok: false, reason: validated.reason };
   }
 
@@ -78,6 +99,18 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
       return { httpSucceeded: false, detail: validated.reason };
     }
     const inventory = validated.action;
+    if (this.executionMode === 'atomic-addon') {
+      const valid = await this.validate(action);
+      if (!valid.ok) return { httpSucceeded: false, remoteWriteAttempted: false, detail: valid.reason };
+      const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.apply, { request: atomicRequest(inventory) });
+      if (isBoundAtomicResponse(result, inventory) && result.status === 'stale') {
+        return { httpSucceeded: false, stale: true, remoteWriteAttempted: false, detail: 'Odoo rejected a stale inventory precondition' };
+      }
+      if (!isVerifiedAtomicReceipt(result, inventory)) {
+        return { httpSucceeded: false, recoveryRequired: true, remoteWriteAttempted: true, detail: 'Atomic Odoo response did not prove the approved action and postcondition' };
+      }
+      return { httpSucceeded: true, remoteWriteAttempted: !result.replayed, detail: result.replayed ? 'Odoo replayed a durable inventory receipt' : 'Odoo atomically applied and verified inventory' };
+    }
     const current = await this.readQuant(inventory.quantId);
     const stale = this.preconditionFailure(inventory, current);
     if (stale) {
@@ -138,6 +171,13 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
       return 'ambiguous';
     }
     const inventory = validated.action;
+    if (this.executionMode === 'atomic-addon') {
+      if (!(await this.validate(action)).ok) return 'ambiguous';
+      const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.status, { request: atomicRequest(inventory) });
+      if (isVerifiedAtomicReceipt(result, inventory)) return 'applied';
+      if (isBoundAtomicResponse(result, inventory) && result.status === 'not_applied') return 'not_applied';
+      return 'ambiguous';
+    }
     const quant = await this.readQuant(inventory.quantId);
     const identityMatches =
       quant.productId === inventory.productId &&
@@ -186,9 +226,9 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
 }
 
 /** Package-internal test helper. Not exported from `@ledgerguard/odoo`. */
-export function adapterFromTransport(transport: OdooJson2Transport, systemId = 'odoo-19'): OdooInventoryAdapter {
-  const adapter = new OdooInventoryAdapter({ baseUrl: 'http://127.0.0.1', apiKey: 'test' }, { systemId });
-  (adapter as unknown as { transport: OdooJson2Transport }).transport = guardedTransport(transport);
+export function adapterFromTransport(transport: OdooJson2Transport, systemId = 'odoo-19', options: Omit<OdooAdapterOptions, 'systemId'> = {}): OdooInventoryAdapter {
+  const adapter = new OdooInventoryAdapter({ baseUrl: 'http://127.0.0.1', apiKey: 'test' }, { ...options, systemId });
+  (adapter as unknown as { transport: OdooJson2Transport }).transport = guardedTransport(transport, options.executionMode);
   return adapter;
 }
 
