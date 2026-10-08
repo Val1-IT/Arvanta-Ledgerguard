@@ -43,6 +43,8 @@
     "scenario:conversion-error": "tsx demo-data/scenarios/conversion-error.ts",
     "scenario:duplicate-inventory": "tsx demo-data/scenarios/duplicate-inventory.ts",
     "scenario:duplicate-inventory:memory": "node --import tsx examples/inventory-ledger/src/run.ts",
+    "example:custom": "node scripts/run-custom-action-example.mjs",
+    "scenario:custom-action:memory": "node --import tsx examples/custom-action/src/run.ts",
     "example": "tsx scripts/generate-example.ts",
     "example:agent": "tsx scripts/generate-agent-example.ts",
     "datahub:up": "node scripts/py.mjs -m datahub docker quickstart",

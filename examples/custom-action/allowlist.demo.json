@@ -1,0 +1,8 @@
+{
+  "writableColumns": {
+    "invoice_lines": ["amount"]
+  },
+  "touchTimestamps": {
+    "invoice_lines": "updated_at"
+  }
+}

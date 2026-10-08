@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@ledgerguard/core": ["../../packages/core/src/index.ts"],
+      "@ledgerguard/policy": ["../../packages/policy/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
