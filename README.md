@@ -199,3 +199,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY
 LedgerGuard began as a DataHub Agent Hackathon prototype. The OSS runtime extracts the deterministic engine, policy, and PostgreSQL adapter so DataHub is one optional integration rather than the product.
 
 Hackathon-era submission and deployment drafts are preserved in [the historical archive](docs/archive/hackathon/). Current evaluation instructions are in the guides above.
+
+
+## Deployment gate
+
+The shipped web UI is a **private synthetic-data evaluation app**, not a
+production identity or ERP access boundary. Compose now binds published ports to
+loopback, copied example configuration disables mutation/provider actions by
+default, and `/api/health/ready` checks connectivity plus required migrations and
+schema instead of treating a fallback HTML page as healthy.
+
+See [isolated deployment validation](docs/testing/deployment-validation.md) for
+the exact build/start/restart/rollback proof and its limits. `DEMO_MODE=true` is an
+explicit demo opt-in, not authentication. Do not expose the UI publicly or use
+real ERP/customer data without a separately reviewed identity, authorization,
+ingress, backup and migration plan.

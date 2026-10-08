@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { InvestigationRunRecordSchema, type InvestigationRunRecord } from '../../agent/types';
+import { sanitizeInvestigationErrors, sanitizeRemediationErrors } from '../../agent/safe-errors';
 import { RemediationPlanRecordSchema, SCHEMA_VERSION, type RemediationPlanRecord } from '../../remediation/types';
 
 /**
@@ -16,7 +17,7 @@ function parseRunRow(row: {
   stateHistoryJson: string;
   createdAt: Date | string;
 }): InvestigationRunRecord {
-  return InvestigationRunRecordSchema.parse({
+  return sanitizeInvestigationErrors(InvestigationRunRecordSchema.parse({
     investigationId: row.investigationId,
     incidentId: row.incidentId,
     input: JSON.parse(row.inputJson),
@@ -25,7 +26,7 @@ function parseRunRow(row: {
     error: row.errorJson ? JSON.parse(row.errorJson) : null,
     stateHistory: JSON.parse(row.stateHistoryJson),
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt
-  });
+  }));
 }
 
 export async function listInvestigationRuns(
@@ -78,7 +79,7 @@ type RemediationPlanRow = {
 };
 
 function parseRemediationPlanRow(row: RemediationPlanRow): RemediationPlanRecord {
-  return RemediationPlanRecordSchema.parse({
+  return sanitizeRemediationErrors(RemediationPlanRecordSchema.parse({
     schemaVersion: SCHEMA_VERSION,
     id: row.id,
     investigationId: row.investigationId,
@@ -100,7 +101,7 @@ function parseRemediationPlanRow(row: RemediationPlanRow): RemediationPlanRecord
     datahubWriteback: row.datahubWritebackJson ? JSON.parse(row.datahubWritebackJson) : null,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt
-  });
+  }));
 }
 
 const REMEDIATION_PLAN_SELECT = `select id, investigation_id as "investigationId", incident_id as "incidentId",

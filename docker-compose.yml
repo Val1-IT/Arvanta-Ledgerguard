@@ -6,7 +6,6 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ledgerguard-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ledgerguard
@@ -14,7 +13,7 @@ services:
       POSTGRES_DB: ledgerguard
     ports:
       # Host 5433 to avoid clashing with any local 5432 Postgres.
-      - '5433:5432'
+      - '127.0.0.1:5433:5432'
     volumes:
       - ledgerguard_pgdata:/var/lib/postgresql/data
     healthcheck:

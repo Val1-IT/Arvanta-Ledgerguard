@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { formatSafeError } from '../../agent/safe-errors';
 import { loadInvestigationInput } from '../../db/repositories/investigation';
 import { investigate, verifyState } from '@ledgerguard/core';
 import { isDemoModeEnabled } from '../lib/demo-mode';
@@ -128,8 +129,7 @@ export async function loadOverviewViewModel(pool: Pool): Promise<OverviewViewMod
       backendAvailable: true,
       backendError: null
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Backend unavailable';
+  } catch {
     return buildOverviewViewModel({
       generatedAt,
       dataHealth: 'DEGRADED',
@@ -145,7 +145,7 @@ export async function loadOverviewViewModel(pool: Pool): Promise<OverviewViewMod
       resetDisabledReason: 'Backend unavailable.',
       simulateDisabledReason: 'Backend unavailable.',
       backendAvailable: false,
-      backendError: message
+      backendError: formatSafeError('BACKEND_UNAVAILABLE')
     });
   }
 }

@@ -12,14 +12,13 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ledgerguard-postgres-demo
     restart: unless-stopped
     environment:
       POSTGRES_USER: ledgerguard
       POSTGRES_PASSWORD: ledgerguard
       POSTGRES_DB: ledgerguard
     ports:
-      - '5433:5432'
+      - '127.0.0.1:5433:5432'
     volumes:
       - ledgerguard_demo_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -36,19 +35,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ledgerguard-app-demo
     restart: unless-stopped
     env_file:
       - .env
     environment:
       DATABASE_URL: postgres://ledgerguard:ledgerguard@postgres:5432/ledgerguard
+      DEMO_MODE: ${DEMO_MODE:-false}
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5

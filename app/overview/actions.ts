@@ -7,7 +7,8 @@ import { getServerPool } from '../../src/agent/server-pool';
 import { applyConversionError } from '../../demo-data/scenarios/conversion-error';
 import { seedDatabase } from '../../src/db/seed';
 import { getRuntimePolicy } from '../../src/runtime/runtime-policy';
-import { assertDemoMode } from '../../src/ui/lib/demo-mode';
+import { formatSafeError } from '../../src/agent/safe-errors';
+import { assertDemoMode, isDemoModeEnabled } from '../../src/ui/lib/demo-mode';
 import { persistDemoCompletedInvestigation } from '../../src/ui/server/demo-incident';
 import { hasBlockingRemediationPlan } from '../../src/ui/server/queries';
 
@@ -106,8 +107,7 @@ export async function simulateConversionErrorAction(): Promise<DemoActionResult>
     if (error && typeof error === 'object' && 'digest' in error) {
       throw error;
     }
-    const message = error instanceof Error ? error.message : 'Simulate failed';
-    return { ok: false, error: message };
+    return { ok: false, error: formatSafeError(isDemoModeEnabled() ? 'DEMO_ACTION_FAILED' : 'DEMO_MODE_DISABLED') };
   }
 }
 
@@ -126,8 +126,7 @@ export async function resetDemoAction(): Promise<DemoActionResult> {
     }
     await seedDatabase(pool);
     return { ok: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Reset failed';
-    return { ok: false, error: message };
+  } catch {
+    return { ok: false, error: formatSafeError(isDemoModeEnabled() ? 'DEMO_ACTION_FAILED' : 'DEMO_MODE_DISABLED') };
   }
 }

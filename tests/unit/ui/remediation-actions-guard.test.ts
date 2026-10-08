@@ -17,6 +17,11 @@ describe('remediation action UI guards', () => {
     expect(actions).toContain('NoRemediableIncidentError');
   });
 
+  it('uses safe fixed guidance if the client action transport rejects unexpectedly', () => {
+    expect(controls).not.toContain('err.message');
+    expect(controls).toContain("setError(formatSafeError('REMEDIATION_ACTION_FAILED'))");
+  });
+
   it('exposes distinct Approve, Reject, and Keep reports frozen controls', () => {
     expect(controls).toContain("action: 'APPROVE'");
     expect(controls).toContain("action: 'REJECT'");
