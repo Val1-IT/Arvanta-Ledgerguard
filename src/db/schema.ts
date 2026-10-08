@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  index,
   integer,
   numeric,
   pgTable,
@@ -204,16 +205,20 @@ export const ledgerguardExecutionKeys = pgTable('ledgerguard_execution_keys', {
   leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true })
 });
 
-export const ledgerguardExecutionJournal = pgTable('ledgerguard_execution_journal', {
-  id: text('id').primaryKey(),
-  idempotencyKey: text('idempotency_key').notNull(),
-  planId: text('plan_id').notNull(),
-  planVersion: integer('plan_version').notNull(),
-  status: text('status').notNull(),
-  sourceStateFingerprint: text('source_state_fingerprint').notNull(),
-  receiptJson: text('receipt_json').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull()
-});
+export const ledgerguardExecutionJournal = pgTable(
+  'ledgerguard_execution_journal',
+  {
+    id: text('id').primaryKey(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    planId: text('plan_id').notNull(),
+    planVersion: integer('plan_version').notNull(),
+    status: text('status').notNull(),
+    sourceStateFingerprint: text('source_state_fingerprint').notNull(),
+    receiptJson: text('receipt_json').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull()
+  },
+  (table) => [index('ledgerguard_execution_journal_key_idx').on(table.idempotencyKey)]
+);
 
 export type ProductRow = typeof products.$inferSelect;
 export type ProductUnitRow = typeof productUnits.$inferSelect;
