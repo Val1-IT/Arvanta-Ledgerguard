@@ -1,6 +1,6 @@
 # Security policy
 
-LedgerGuard is pre-1.0 research/demo software. The v0.1 demo does not provide production authentication.
+LedgerGuard is pre-1.0 research/demo software. The demo does not provide production authentication.
 
 ## Reporting a vulnerability
 
@@ -20,4 +20,4 @@ Do not file public issues that include working exploits against the demo databas
 
 ## Supported versions
 
-Only the current `main` / pre-release `0.1.x` line is considered. There is no long-term support commitment until a stable 1.0.
+Report issues against current `main` or the exact commit of an open development PR; the latest published release is v0.2.0 and v0.3 is experimental. There is no long-term support commitment until a stable 1.0.

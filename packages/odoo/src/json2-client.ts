@@ -1,5 +1,5 @@
 import { assertAllowlistedCall } from './allowlist';
-import type { OdooConnectionConfig, OdooJson2Transport } from './types';
+import type { OdooConnectionConfig, OdooExecutionMode, OdooJson2Transport } from './types';
 
 const USER_AGENT = 'ledgerguard-odoo/0.3.0';
 
@@ -11,10 +11,10 @@ function redactHeaders(headers: Record<string, string>): Record<string, string> 
   return copy;
 }
 
-export function createJson2Transport(config: OdooConnectionConfig): OdooJson2Transport {
+export function createJson2Transport(config: OdooConnectionConfig, mode: OdooExecutionMode = 'experimental-json2'): OdooJson2Transport {
   const baseUrl = config.baseUrl.replace(/\/+$/, '');
   return async (model, method, body) => {
-    assertAllowlistedCall(model, method);
+    assertAllowlistedCall(model, method, mode);
     const headers: Record<string, string> = {
       Authorization: `bearer ${config.apiKey}`,
       'Content-Type': 'application/json; charset=utf-8',
@@ -49,9 +49,9 @@ export function createJson2Transport(config: OdooConnectionConfig): OdooJson2Tra
   };
 }
 
-export function guardedTransport(inner: OdooJson2Transport): OdooJson2Transport {
+export function guardedTransport(inner: OdooJson2Transport, mode: OdooExecutionMode = 'experimental-json2'): OdooJson2Transport {
   return async (model, method, body) => {
-    assertAllowlistedCall(model, method);
+    assertAllowlistedCall(model, method, mode);
     return inner(model, method, body);
   };
 }

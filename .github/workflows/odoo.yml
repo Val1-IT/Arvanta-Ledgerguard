@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'packages/odoo/**'
+      - 'addons/ledgerguard_inventory/**'
       - 'packages/core/src/ports/constrained-action.ts'
       - 'packages/core/src/lifecycle/execute-constrained-action.ts'
       - 'src/remediation/execute-remote-action.ts'
@@ -35,6 +36,7 @@ jobs:
         run: |
           chmod +x scripts/odoo-ci-bootstrap.sh
           KEY="$(bash scripts/odoo-ci-bootstrap.sh | tail -n 1)"
+          echo "::add-mask::$KEY"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
       - name: Live JSON-2 and control-plane tests
         env:
@@ -44,4 +46,5 @@ jobs:
           ODOO_API_KEY: ${{ steps.bootstrap.outputs.key }}
         run: |
           pnpm --filter @ledgerguard/odoo exec vitest run test/live.integration.test.ts
+          pnpm --filter @ledgerguard/odoo exec vitest run test/atomic-live.integration.test.ts
           pnpm exec vitest run --config vitest.odoo.config.ts

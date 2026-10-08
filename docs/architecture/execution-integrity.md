@@ -1,4 +1,4 @@
-# Execution integrity (v0.2)
+# Execution integrity (v0.3 experimental adapters)
 
 LedgerGuard is a deterministic execution integrity runtime for AI agents operating on systems of record.
 
@@ -51,9 +51,27 @@ Odoo 19 (`@ledgerguard/odoo`) is experimental: one `stock.quant` inventory adjus
 ## What v0.2 does not claim
 
 - Exactly-once delivery.
-- Crash recovery for adapters without native transactions.
+- A distributed transaction across the control plane and remote adapters.
 - Durable in-process audit logs (`createMemoryAuditLog` is still request-scoped).
-- Odoo / ERPNext adapters.
+- General-purpose Odoo or ERPNext mutation support.
 - Production authentication.
 
 See [authority-model.md](authority-model.md) and [threat-model.md](../threat-model.md).
+
+## Remote approval snapshot and conditional Odoo operation
+
+A remote plan persists `remoteActionBinding` at draft creation. It binds exact
+action JSON, trusted system ID/type, and fingerprint; the normal human approval
+transition approves that persisted snapshot. Execution and replay validate the
+binding before reading keys or contacting the adapter. Changing intent requires
+a new draft. Existing approved remote rows without a binding fail closed.
+
+A post-write remote verification failure remains `VERIFYING` with
+`RECOVERY_REQUIRED`; it is not a SQL rollback. Valid execution and verification
+records remain loadable after persistence, including failed/uncertain outcomes.
+
+The optional Odoo addon performs its conditional action, verification and receipt
+write inside one Odoo transaction. `nativeTransactions` and
+`idempotencyInNativeTransaction` stay false for the cross-system control plane;
+narrow addon capabilities describe only that remote conditional operation.
+See [Odoo scope and limits](../integrations/odoo.md).

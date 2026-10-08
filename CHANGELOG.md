@@ -59,3 +59,10 @@ First public-facing LedgerGuard cut (GitHub source; packages are not published t
 - Scenario: unit conversion mismatch (`1 CARTON = 12` recorded as `10`)
 - Scenario: duplicate inventory movement (receipt 10, two +10 postings)
 - Verify-before-commit with rollback on verification failure
+
+### Atomic Odoo evaluation path
+
+- Add opt-in constrained Odoo inventory addon with permission checks, row locking,
+  pre-state validation, transactional verification and durable action receipts.
+- Add server-side and live JSON-2 regression suites; retain experimental scope.
+- Correct container build to use the pnpm workspace and add a container CI check.

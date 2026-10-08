@@ -16,7 +16,9 @@ services:
       odoo-db:
         condition: service_healthy
     ports:
-      - "8069:8069"
+      - "127.0.0.1:8069:8069"
+    volumes:
+      - ./addons:/mnt/extra-addons:ro
     environment:
       HOST: odoo-db
       USER: odoo
