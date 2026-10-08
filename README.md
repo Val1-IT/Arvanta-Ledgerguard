@@ -49,7 +49,7 @@ License: [Apache-2.0](LICENSE)
 
 ## Quickstart: one-command local demo
 
-Requires **Node.js 20+** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
+Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows:
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git

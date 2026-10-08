@@ -5,7 +5,7 @@ fixtures. Never point the test suite at a production database or ERP.
 
 ## 1. Reproduce the offline demo
 
-Use Node.js 20 or later and the pinned pnpm 9.15.9. From a fresh checkout:
+Use Node.js 24 (or supported 20.19+ / 22.12+) and the pinned pnpm 9.15.9. From a fresh checkout:
 
 ```sh
 pnpm demo
