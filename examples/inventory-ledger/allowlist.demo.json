@@ -1,0 +1,13 @@
+{
+  "writableColumns": {
+    "product_units": ["conversion_factor"],
+    "inventory_movements": ["base_quantity", "reversed_at"],
+    "inventory_valuation": ["quantity_on_hand", "average_cost", "inventory_value"],
+    "gross_margin_report": ["cost_of_goods_sold", "gross_profit", "gross_margin_percentage"]
+  },
+  "touchTimestamps": {
+    "product_units": "updated_at",
+    "inventory_valuation": "calculated_at",
+    "gross_margin_report": "generated_at"
+  }
+}

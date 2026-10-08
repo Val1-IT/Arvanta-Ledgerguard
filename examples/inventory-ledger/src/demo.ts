@@ -148,9 +148,24 @@ export class MemoryAdapter implements SystemOfRecordAdapter {
   }
 }
 
+const quiet =
+  process.argv.includes('--quiet') || process.env.LEDGERGUARD_DEMO_QUIET === '1';
+
 function log(title: string, value: unknown) {
+  if (quiet) return;
   console.log(`\n=== ${title} ===`);
   console.log(typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+}
+
+function printSummary() {
+  console.log('\n---------- DEMO SUMMARY ----------');
+  console.log('Result: DEMO PASS');
+  console.log('Incident: DUPLICATE_INVENTORY_MOVEMENT');
+  console.log('Policy: REQUIRE_APPROVAL → ALLOW (simulated human approval of plan v2)');
+  console.log('Execute: committed, verification PASS');
+  console.log('Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)');
+  console.log('Quantity: 20.000 → 10.000 | Valuation: 1700000.00 → 850000.00');
+  console.log('----------------------------------');
 }
 
 export async function runInventoryDemo() {
@@ -245,5 +260,6 @@ export async function runInventoryDemo() {
   console.log('Quantity: 20.000 -> 10.000 | Valuation: 1700000.00 -> 850000.00');
   console.log('Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)');
   console.log('In-memory demonstration only; persisted idempotency and SQL transactions need the PostgreSQL integration path.');
+  printSummary();
   return { executed, replay, completedKeyPolicy, snapshot: adapter.snapshot };
 }

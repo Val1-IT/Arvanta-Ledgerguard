@@ -10,7 +10,7 @@ import {
 } from './helpers/db';
 import { gotoOverview, openTab, resetDemoViaUi } from './helpers/ui';
 
-const shotDir = path.join('docs', 'ui-audit', 'screenshots');
+const shotDir = path.join('docs', 'archive', 'hackathon', 'ui-audit', 'screenshots');
 
 test.describe.configure({ mode: 'serial' });
 
