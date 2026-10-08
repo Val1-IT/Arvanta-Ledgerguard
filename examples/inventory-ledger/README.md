@@ -39,11 +39,15 @@ pnpm scenario:duplicate-inventory:memory
 
 Pass `--quiet` (or `LEDGERGUARD_DEMO_QUIET=1`) to skip the JSON dumps and keep the DEMO PASS summary.
 
-PostgreSQL (Docker or an already-running demo database):
+PostgreSQL (an already-running local PostgreSQL 16 instance and a new empty disposable database):
 
 ```
+# First follow the explicit database creation / DATABASE_URL setup:
+# ../../docs/testing/postgres-demo.md
 pnpm demo:pg
 ```
+
+The PostgreSQL demo asks separately for initialization and remediation approval. It refuses occupied databases, displays the persisted pending plan's ID/version/corrections before approval, and never starts Docker or truncates existing tables. Declining remediation keeps the initialization you already authorized. See the [setup and safety guide](../../docs/testing/postgres-demo.md).
 
 ## Where your agent plugs in
 

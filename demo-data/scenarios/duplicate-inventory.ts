@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { investigate } from '@ledgerguard/core';
 import { makePool } from '../../src/db/client';
 import { loadInvestigationInput } from '../../src/db/repositories/investigation';
@@ -7,7 +7,7 @@ import { loadInvestigationInput } from '../../src/db/repositories/investigation'
 const RECEIVED_AT = new Date('2026-03-02T14:15:00.000Z');
 const DUPLICATE_AT = new Date('2026-03-02T14:15:00.250Z');
 
-export async function applyDuplicateInventoryError(pool: Pool): Promise<void> {
+export async function applyDuplicateInventoryError(pool: Pool | PoolClient): Promise<void> {
   await pool.query(
     `insert into products (id, sku, name, base_unit, standard_cost, created_at)
      values ('ITEM-001', 'WDG-001', 'Industrial Widget', 'PCS', '85000.00', $1)

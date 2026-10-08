@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { makePool } from './client';
 import {
   ACCOUNT,
@@ -55,6 +55,13 @@ async function truncateAll(pool: Pool): Promise<void> {
 }
 
 export async function seedDatabase(pool: Pool): Promise<void> {
+  await truncateAll(pool);
+  await insertSeedData(pool);
+}
+
+// Inserts only. The demo calls this on its freshly created tables within the
+// same initialization transaction; existing seed/reset callers retain reset.
+export async function insertSeedData(pool: Pool | PoolClient): Promise<void> {
   const s = SCENARIO;
   const correctFactor = UNIT.CARTON.correctFactor;
 
@@ -75,8 +82,6 @@ export async function seedDatabase(pool: Pool): Promise<void> {
   const inventoryValue = quantityOnHand * averageCost; // 72,000,000
   const grossProfit = totalRevenue - totalCogs; // 36,000,000
   const grossMarginPct = (grossProfit / totalRevenue) * 100; // 33.3333
-
-  await truncateAll(pool);
 
   // products
   await pool.query(

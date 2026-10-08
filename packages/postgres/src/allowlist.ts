@@ -27,6 +27,7 @@ export const WRITABLE_COLUMNS: WritableColumnMap = DEMO_WRITABLE_COLUMNS;
 export const TOUCH_TIMESTAMP_COLUMN: TouchTimestampMap = DEMO_TOUCH_TIMESTAMP_COLUMNS;
 
 export interface AllowlistConfig {
+  /** Exact-case, simple ASCII SQL identifiers, each at most 63 bytes. */
   writableColumns: Readonly<Record<string, readonly string[]>>;
   touchTimestamps?: Readonly<Record<string, string>>;
 }
@@ -41,19 +42,31 @@ const EMPTY_ALLOWLIST: ResolvedAllowlist = Object.freeze({
   touchTimestamps: Object.freeze({})
 });
 
-function freezeColumnMap(input: Record<string, ReadonlySet<string>>): WritableColumnMap {
-  return Object.freeze(input);
+function normalizeColumns(
+  input: Readonly<Record<string, readonly string[]>>
+): WritableColumnMap {
+  const out: Record<string, ReadonlySet<string>> = Object.create(null);
+  for (const [table, cols] of Object.entries(input)) {
+    out[table] = new Set(cols);
+  }
+  return Object.freeze(out);
 }
 
-function normalizeColumns(
-  input?: Readonly<Record<string, readonly string[] | ReadonlySet<string>>>
-): WritableColumnMap {
-  if (!input) return Object.freeze({});
-  const out: Record<string, ReadonlySet<string>> = {};
-  for (const [table, cols] of Object.entries(input)) {
-    out[table] = cols instanceof Set ? cols : new Set(cols);
+function assertIdentifier(value: unknown, location: string): asserts value is string {
+  // Restrict to one identifier, not a schema/path or SQL fragment. The byte cap
+  // avoids PostgreSQL silently truncating names and targeting another object.
+  if (typeof value !== 'string' || value.length > 63 ||
+      !/^[A-Za-z_]/.test(value) || /[^A-Za-z0-9_]/.test(value)) {
+    throw new Error(
+      `${location} must be a simple SQL identifier (ASCII letter or underscore, then letters, digits or underscores; maximum 63 bytes). Fail-closed.`
+    );
   }
-  return freezeColumnMap(out);
+}
+
+/** Validate at the SQL boundary as well as when loading caller configuration. */
+export function quoteIdentifier(identifier: string): string {
+  assertIdentifier(identifier, 'SQL identifier');
+  return `"${identifier}"`;
 }
 
 /**
@@ -70,12 +83,17 @@ export function resolveAllowlist(config?: AllowlistConfig | null): ResolvedAllow
       touchTimestamps: DEMO_TOUCH_TIMESTAMP_COLUMNS
     };
   }
-  if (config === null || Object.keys(config.writableColumns ?? {}).length === 0) {
+  if (config === null) {
+    return EMPTY_ALLOWLIST;
+  }
+  // Code-supplied configs must pass the same validation and snapshotting as JSON.
+  const parsed = parseAllowlistConfig(config);
+  if (Object.keys(parsed.writableColumns).length === 0) {
     return EMPTY_ALLOWLIST;
   }
   return {
-    writableColumns: normalizeColumns(config.writableColumns),
-    touchTimestamps: Object.freeze({ ...(config.touchTimestamps ?? {}) })
+    writableColumns: normalizeColumns(parsed.writableColumns),
+    touchTimestamps: parsed.touchTimestamps ?? Object.freeze(Object.create(null))
   };
 }
 
@@ -84,7 +102,8 @@ export function isWritableColumn(
   field: string,
   config?: AllowlistConfig | null
 ): boolean {
-  return resolveAllowlist(config).writableColumns[table]?.has(field) === true;
+  const columns = resolveAllowlist(config).writableColumns;
+  return Object.hasOwn(columns, table) && columns[table]?.has(field) === true;
 }
 
 export function parseAllowlistConfig(raw: unknown): AllowlistConfig {
@@ -94,34 +113,39 @@ export function parseAllowlistConfig(raw: unknown): AllowlistConfig {
     );
   }
   const obj = raw as Record<string, unknown>;
-  const writableRaw = obj.writableColumns;
-  if (writableRaw == null) {
-    return { writableColumns: {} };
-  }
+  const writableRaw = obj.writableColumns ?? {};
   if (typeof writableRaw !== 'object' || Array.isArray(writableRaw)) {
     throw new Error('writableColumns must be an object of table → string[]. Fail-closed.');
   }
-  const writableColumns: Record<string, string[]> = {};
+  const writableColumns: Record<string, readonly string[]> = Object.create(null);
   for (const [table, cols] of Object.entries(writableRaw as Record<string, unknown>)) {
-    if (!Array.isArray(cols) || cols.some((col) => typeof col !== 'string' || col.length === 0)) {
-      throw new Error(`writableColumns.${table} must be a non-empty array of column name strings. Fail-closed.`);
+    assertIdentifier(table, 'writableColumns table');
+    if (!Array.isArray(cols)) {
+      throw new Error(`writableColumns.${table} must be an array of column name strings. Fail-closed.`);
     }
-    writableColumns[table] = cols as string[];
+    // Capture once before validating; caller-owned arrays/accessors must not be
+    // re-read later and replace a validated name with an unchecked SQL fragment.
+    const columnNames: unknown[] = Array.from(cols);
+    for (const col of columnNames) {
+      assertIdentifier(col, `writableColumns.${table} column`);
+    }
+    writableColumns[table] = Object.freeze(columnNames as string[]);
   }
   let touchTimestamps: Record<string, string> | undefined;
-  if (obj.touchTimestamps != null) {
-    if (typeof obj.touchTimestamps !== 'object' || Array.isArray(obj.touchTimestamps)) {
+  const touchRaw = obj.touchTimestamps;
+  if (touchRaw != null) {
+    if (typeof touchRaw !== 'object' || Array.isArray(touchRaw)) {
       throw new Error('touchTimestamps must be an object of table → column name. Fail-closed.');
     }
-    touchTimestamps = {};
-    for (const [table, col] of Object.entries(obj.touchTimestamps as Record<string, unknown>)) {
-      if (typeof col !== 'string' || col.length === 0) {
-        throw new Error(`touchTimestamps.${table} must be a column name string. Fail-closed.`);
-      }
+    touchTimestamps = Object.create(null) as Record<string, string>;
+    for (const [table, col] of Object.entries(touchRaw as Record<string, unknown>)) {
+      assertIdentifier(table, 'touchTimestamps table');
+      assertIdentifier(col, `touchTimestamps.${table} column`);
       touchTimestamps[table] = col;
     }
+    Object.freeze(touchTimestamps);
   }
-  return { writableColumns, touchTimestamps };
+  return Object.freeze({ writableColumns: Object.freeze(writableColumns), touchTimestamps });
 }
 
 export function loadAllowlistConfig(filePath: string): AllowlistConfig {

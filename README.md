@@ -61,7 +61,7 @@ cd Arvanta-Ledgerguard
 pnpm demo
 ```
 
-`pnpm demo` installs only `tsx`, `decimal.js` and `zod` into `examples/inventory-ledger` (on the order of tens of MB, not the Next.js workspace), then runs the duplicate-inventory scenario with the real core and policy packages against a fresh in-memory fixture. The first install needs access to the npm registry. No Docker, `.env`, database, DataHub, or model API key is needed. Existing environment files and databases are not read or changed by the scenario. Reruns start from fresh synthetic data. Pass `--quiet` (or `LEDGERGUARD_DEMO_QUIET=1`) to skip the JSON dumps and keep the DEMO PASS summary. Postgres/Docker is needed only for `pnpm demo:pg` and the web UI.
+`pnpm demo` installs only `tsx`, `decimal.js` and `zod` into `examples/inventory-ledger` (on the order of tens of MB, not the Next.js workspace), then runs the duplicate-inventory scenario with the real core and policy packages against a fresh in-memory fixture. The first install needs access to the npm registry. No Docker, `.env`, database, DataHub, or model API key is needed. Existing environment files and databases are not read or changed by the scenario. Reruns start from fresh synthetic data. Pass `--quiet` (or `LEDGERGUARD_DEMO_QUIET=1`) to skip the JSON dumps and keep the DEMO PASS summary. A local PostgreSQL instance is needed for `pnpm demo:pg`; Docker is optional for separately managed development services.
 
 The demo shows evidence, a proposed repair, `REQUIRE_APPROVAL`, a **simulated human approval**, and verified execution. It exits nonzero if any expected result fails. Successful output ends with:
 
@@ -87,7 +87,7 @@ This is a deterministic terminal demo, not a live agent or web UI. It demonstrat
 
 **Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
 
-**Trying LedgerGuard?** After `pnpm demo`, try [`pnpm demo:pg`](#postgresql-demo-optional-datahub-not-required) (Docker) or point the adapter at your own table with [try-on-your-own-table](docs/try-on-your-own-table.md). [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) or [file a tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
+**Trying LedgerGuard?** After `pnpm demo`, try [`pnpm demo:pg`](#postgresql-demo-optional-datahub-not-required) (a fresh local PostgreSQL database) or point the adapter at your own table with [try-on-your-own-table](docs/try-on-your-own-table.md). [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) or [file a tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 
 ### Manual fallback: same in-memory demo
 
@@ -102,45 +102,26 @@ If installation fails, check registry/network access and the Node/pnpm versions,
 
 ### PostgreSQL demo (optional, DataHub not required)
 
-Requires Docker running with Compose available. The in-memory `pnpm demo` above needs no Docker, `.env`, or database; Postgres/Docker is only for this path and the web UI. Use only the disposable demo database: seeding replaces its synthetic data. No `.env` copy is needed.
+Use an already-running local PostgreSQL 16 instance and a **new empty disposable database** that you own. The demo never starts Docker or resets an existing database. See the [PostgreSQL demo setup guide](docs/testing/postgres-demo.md) for authentication, Windows commands, and safety boundaries.
+
+With PostgreSQL's CLI installed, replace `YOUR_LOCAL_ROLE` and the port with your local settings:
 
 ```bash
+createdb --host=127.0.0.1 --port=5432 --username=YOUR_LOCAL_ROLE --template=template0 ledgerguard_demo_first_run
+export DATABASE_URL='postgresql://YOUR_LOCAL_ROLE@127.0.0.1:5432/ledgerguard_demo_first_run'
 pnpm demo:pg
 ```
 
-`pnpm demo:pg` uses `DATABASE_URL` if set, otherwise `postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard` (Compose maps host 5433 → container 5432).
+`pnpm demo:pg` installs locked dependencies and runs the scenario. First approve initialization of the displayed empty database. Then review the persisted pending plan's ID, version, and exact corrections before separately approving remediation. Declining initialization makes no database changes. Declining remediation preserves the authorized fixture and pending plan without executing the repair.
 
-#### Manual fallback: same PostgreSQL demo
+Only explicit loopback URLs with a `ledgerguard_demo_` database name and no query parameters or fragment are accepted. Occupied databases and unknown flags are refused. Data remains after the demo; create a new empty database for each run. Do not run the separate `db:seed` or `db:setup` reset-oriented developer commands as setup for this demo.
 
-Use separate steps to diagnose a Compose/database failure. In a new terminal, explicitly select the local Compose database before running the remaining commands; this takes precedence over a `DATABASE_URL` in `.env`.
+A successful run reports verified SQL execution and persisted replay:
 
-macOS/Linux:
-
-```bash
-export DATABASE_URL=postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard
-```
-
-Windows PowerShell:
-
-```powershell
-$env:DATABASE_URL = 'postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard'
-```
-
-Then, in that same terminal, from the repository directory:
-
-```bash
-pnpm install --frozen-lockfile --prod=false
-pnpm db:up
-pnpm db:wait
-pnpm db:migrate
-pnpm db:seed
-
-# Scenario 1 — unit conversion mismatch (CARTON 12 → 10)
-pnpm scenario:conversion-error
-
-# Reset, then scenario 2 — duplicate inventory movement
-pnpm db:seed
-pnpm scenario:duplicate-inventory
+```text
+Execute: EXECUTED, verification PASS
+Replay: ALREADY_EXECUTED
+Quantity: 10.000 | Valuation: 850000.00
 ```
 
 Release checks without Docker:
@@ -149,7 +130,7 @@ Release checks without Docker:
 pnpm verify
 ```
 
-PostgreSQL integration (requires a migrated database):
+PostgreSQL integration requires a **separate disposable test database**: fixtures may reset data, and demo tests require a role with `CREATEDB`. Never point these tests at retained or production data:
 
 ```bash
 pnpm verify:integration
