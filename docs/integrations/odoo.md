@@ -64,4 +64,65 @@ Odoo and LedgerGuard do **not** share a SQL transaction (`nativeTransactions: fa
 - No move cancellation, no accounting, no multi-warehouse orchestration
 - No simulation/compensation
 - Hosted Odoo.com *One App Free* / Standard plans may not expose the external API; self-hosted Community is the supported path
-- Live tests are opt-in (`ODOO_BASE_URL` + `ODOO_API_KEY`); default CI does not start Odoo
+- Live tests require explicit disposable-instance opt-in; the dedicated Odoo CI workflow starts an isolated service
+
+## Approval-bound integration
+
+Apply migrations before using the remote executor. A remote plan now stores an
+immutable `remoteActionBinding` containing the complete action JSON, adapter
+`systemId`/`systemType`, and approved source fingerprint. When preparing a DRAFT,
+call `prepareRemoteActionBinding(adapter, action)` from
+`src/remediation/remote-action-binding.ts`, persist that binding with the draft,
+and show the complete binding to the human approver. Then use the normal
+submit/approve state transitions. At execution, pass exactly that action and
+fingerprint to `executeRemoteConstrainedAction`.
+
+These control-plane helpers are source-level application APIs, not a published
+npm package. The packages currently export TypeScript source; use the repository
+workspace/toolchain or a compatible TypeScript bundler.
+
+A changed target, quantity, system ID, or source fingerprint requires a new plan
+and fresh approval. Old remote plans without a binding fail closed; do not
+backfill already-approved plans. A fingerprint describes observed state, not
+permission to choose a new action. Adapter system IDs must uniquely identify the
+trusted configured ERP instance; never let model output select the connection.
+
+An idempotency key belongs permanently to one plan and execution version. Replay
+and recovery use the original version. Resuming an INTERRUPTED plan at its newer
+version uses a new key (omit the custom key to use the version-scoped default).
+`ExecutionKeyConflictError` means the key belongs to another plan/version.
+`ApprovalRequiredError` for a binding mismatch means re-investigate and request
+approval, not retry with a newly fabricated fingerprint.
+
+## Transaction and recovery limits
+
+The legacy adapter's read, write, apply, and verification calls are separate
+Odoo transactions. Another writer can change inventory between those requests.
+Client fingerprints and leases do not make the sequence atomic or fence an
+in-flight Odoo request. Do not claim serializable execution, exactly-once ERP
+effects, or verify-before-commit across that boundary. See Odoo's
+[JSON-2 transaction semantics](https://www.odoo.com/documentation/19.0/developer/reference/external_api.html#transaction).
+
+A remote verification failure may occur after Odoo persisted changes. It does
+not mean rollback happened. Transport/verification uncertainty retains the key
+reservation and returns `RECOVERY_REQUIRED`; do not automatically retry writes.
+Matching final quantity establishes the observed postcondition, not provenance
+of which actor caused it. A constrained server-side conditional operation is
+required for stronger concurrency and recovery guarantees.
+
+## Explicit live-test safety gate
+
+Mutating live tests require all of:
+
+```sh
+export LEDGERGUARD_ODOO_TEST_INSTANCE=1
+export ODOO_BASE_URL=http://127.0.0.1:8069
+export ODOO_DATABASE=odoo
+# Provide the disposable test instance's ODOO_API_KEY securely.
+pnpm --filter @ledgerguard/odoo exec vitest run test/live.integration.test.ts
+pnpm exec vitest run --config vitest.odoo.config.ts
+```
+
+Only loopback hosts are accepted by the test harness. This is an accidental-target
+safety guard, not proof that a local proxy cannot reach production. Confirm the
+instance is disposable yourself. The adapter itself is not restricted to loopback.

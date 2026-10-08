@@ -69,6 +69,8 @@ Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
 
 This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use the PostgreSQL path below to exercise those.
 
+**Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
+
 **Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.md) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 
 ### Manual fallback: same in-memory demo

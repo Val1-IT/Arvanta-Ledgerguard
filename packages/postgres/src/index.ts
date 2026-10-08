@@ -10,11 +10,14 @@ export { fetchGrossMarginReports, fetchBaselineSnapshot } from './repositories/r
 export { fetchPurchaseReceipts } from './repositories/receipts';
 export {
   PostgresExecutionKeyStore,
+  ExecutionKeyConflictError,
+  assertExecutionKeyOwnership,
   defaultExecutionKey,
   DEFAULT_RESERVATION_LEASE_MS,
   type ExecutionKeyReservation,
   type ExecutionKeyState,
   type ExecutionKeyRecord,
+  type ExecutionKeyOwner,
   type StaleReservationRecovery,
   type StaleReservationClassification
 } from './execution-keys';

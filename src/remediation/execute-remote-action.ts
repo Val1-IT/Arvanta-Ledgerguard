@@ -8,9 +8,10 @@ import {
   type AdapterCapabilities,
   type ConstrainedAction,
   type ConstrainedActionAdapter,
+  type ConstrainedActionExecutionResult,
   type ExecutionReceipt
 } from '@ledgerguard/core';
-import { defaultExecutionKey, PostgresExecutionKeyStore } from '@ledgerguard/postgres';
+import { assertExecutionKeyOwnership, defaultExecutionKey, PostgresExecutionKeyStore } from '@ledgerguard/postgres';
 import {
   ApprovalRequiredError,
   ConcurrentExecutionError,
@@ -24,6 +25,7 @@ import {
   DEFAULT_POLICY_CONFIG
 } from '@ledgerguard/policy';
 import { applyRemediationPlanTransition, loadRemediationPlan } from '../db/repositories/remediation-plans';
+import { assertRemoteActionBinding } from './remote-action-binding';
 import {
   InvalidTransitionError,
   OptimisticConcurrencyError,
@@ -31,8 +33,10 @@ import {
   isRecoveryTransitionAllowed,
   isTransitionAllowed,
   type ExecuteRemediationPlanResult,
+  type RemediationExecutionResult,
   type RemediationPlanRecord,
-  type RemediationPlanState
+  type RemediationPlanState,
+  type RemediationVerification
 } from './types';
 
 export interface ExecuteRemoteActionInput {
@@ -57,6 +61,8 @@ export async function executeRemoteConstrainedAction(
   input: ExecuteRemoteActionInput,
   deps: ExecuteRemoteActionDeps
 ): Promise<ExecuteRemediationPlanResult> {
+  // The caller must not be able to change approved intent during an awaited read.
+  const action = JSON.parse(JSON.stringify(input.action)) as ConstrainedAction;
   const now = deps.now ?? (() => new Date());
   const authority = assertTrustedExecutor(deps.authority);
   const audit = deps.audit ?? createMemoryAuditLog();
@@ -64,16 +70,20 @@ export async function executeRemoteConstrainedAction(
   const policyConfig = deps.policyConfig ?? DEFAULT_POLICY_CONFIG;
   const plan = await loadRemediationPlan(deps.pool, input.planId);
   if (!plan) throw new RemediationPlanNotFoundError(input.planId);
+  assertRemoteActionBinding(plan, deps.adapter, action, input.expectedFingerprint);
 
   const idempotencyKey = input.idempotencyKey ?? defaultExecutionKey(plan.id, input.expectedVersion);
   const existingKey = await keys.get(idempotencyKey);
+  if (existingKey) {
+    assertExecutionKeyOwnership(existingKey, { planId: plan.id, planVersion: input.expectedVersion });
+  }
 
   if (existingKey?.state === 'completed') {
     return reconcileRemoteCompleted({
       pool: deps.pool,
       keys,
       adapter: deps.adapter,
-      action: input.action,
+      action,
       plan,
       idempotencyKey,
       authorityActorId: authority.actorId,
@@ -90,7 +100,7 @@ export async function executeRemoteConstrainedAction(
       pool: deps.pool,
       keys,
       adapter: deps.adapter,
-      action: input.action,
+      action,
       plan,
       idempotencyKey,
       authorityActorId: authority.actorId,
@@ -153,14 +163,32 @@ export async function executeRemoteConstrainedAction(
   });
 
   const executionId = randomUUID();
-  const result = await executeConstrainedAction(deps.adapter, input.action, input.expectedFingerprint);
+  const startedAt = current.updatedAt;
+  let result: ConstrainedActionExecutionResult;
+  try {
+    result = await executeConstrainedAction(deps.adapter, action, input.expectedFingerprint);
+  } catch {
+    // A rejected transport promise does not establish whether its remote transaction
+    // committed. Keep the reservation and never automatically replay the mutation.
+    audit.append({
+      occurredAt: now().toISOString(),
+      type: 'execution.recovery_ambiguous',
+      actorId: authority.actorId,
+      planId: plan.id,
+      payload: { detail: 'Remote execution or verification failed; remote state must be recovered' }
+    });
+    return { plan: current, outcome: 'RECOVERY_REQUIRED' };
+  }
 
   if (result.outcome === 'STALE') {
     await keys.failRetryable(idempotencyKey, now(), { status: 'STALE', detail: result.detail });
     const failed = await applyRemediationPlanTransition(deps.pool, input.planId, current.version, {
       state: 'EXECUTION_FAILED',
       updatedAt: now().toISOString(),
-      executionResultJson: JSON.stringify({ outcome: 'FAILED', failureReason: 'DRIFT_DETECTED', detail: result.detail })
+      executionResultJson: JSON.stringify(executionRecord({
+        outcome: 'FAILED', startedAt, finishedAt: now().toISOString(),
+        failureReason: 'DRIFT_DETECTED', failureDetail: result.detail
+      }))
     });
     return { plan: failed, outcome: 'FAILED' };
   }
@@ -181,7 +209,8 @@ export async function executeRemoteConstrainedAction(
     planId: plan.id,
     planVersion: input.expectedVersion,
     idempotencyKey,
-    status: result.verified ? ExecutionStatus.committed : ExecutionStatus.verificationFailed,
+    status: result.verified ? ExecutionStatus.committed :
+      result.outcome === 'VERIFICATION_FAILED' ? ExecutionStatus.verificationFailed : ExecutionStatus.denied,
     sourceStateFingerprint: result.fingerprintBefore ?? input.expectedFingerprint,
     adapter: {
       systemId: deps.adapter.meta.systemId,
@@ -214,17 +243,39 @@ export async function executeRemoteConstrainedAction(
       state: 'RESOLVED',
       updatedAt: now().toISOString(),
       executedAt: now().toISOString(),
-      executionResultJson: JSON.stringify({ outcome: 'EXECUTED', receipt, fingerprintAfter: result.fingerprintAfter }),
-      verificationJson: JSON.stringify({ verifiedAt: now().toISOString(), result: { overallStatus: 'PASS' } })
+      executionResultJson: JSON.stringify({
+        ...executionRecord({ outcome: 'EXECUTED', startedAt, finishedAt: now().toISOString() }),
+        receipt, fingerprintAfter: result.fingerprintAfter
+      }),
+      verificationJson: JSON.stringify(verificationRecord(action, true, result.detail, now()))
     });
     return { plan: resolved, outcome: 'EXECUTED', receipt };
   }
 
-  await keys.failRetryable(idempotencyKey, now(), receipt);
+  if (result.remoteWriteAttempted) {
+    // The remote write may already be committed. Preserve a recoverable state
+    // rather than a terminal SQL-style rollback failure.
+    current = await applyRemediationPlanTransition(deps.pool, input.planId, current.version, {
+      state: 'VERIFYING', updatedAt: now().toISOString(),
+      executionResultJson: JSON.stringify({
+        ...executionRecord({ outcome: 'RECOVERY_REQUIRED', startedAt, finishedAt: now().toISOString(), failureDetail: result.detail }),
+        receipt
+      }),
+      verificationJson: JSON.stringify(verificationRecord(action, false, result.detail, now()))
+    });
+    return { plan: current, outcome: 'RECOVERY_REQUIRED', receipt };
+  }
+
+  // Only a known no-write rejection is retryable. Failed verification is not a
+  // rollback on a remote system, so do not release its execution reservation.
+  if (!result.remoteWriteAttempted) await keys.failRetryable(idempotencyKey, now(), receipt);
   const failed = await applyRemediationPlanTransition(deps.pool, input.planId, current.version, {
-    state: result.outcome === 'VERIFICATION_FAILED' ? 'VERIFICATION_FAILED' : 'EXECUTION_FAILED',
+    state: 'EXECUTION_FAILED',
     updatedAt: now().toISOString(),
-    executionResultJson: JSON.stringify({ outcome: 'FAILED', receipt, detail: result.detail })
+    executionResultJson: JSON.stringify({
+      ...executionRecord({ outcome: 'FAILED', startedAt, finishedAt: now().toISOString(), failureDetail: result.detail }),
+      receipt
+    })
   });
   return { plan: failed, outcome: 'FAILED', receipt };
 }
@@ -252,11 +303,13 @@ async function recoverRemoteReserved(input: {
     return finishRemoteApplied(input, classification);
   }
   if (classification === 'not_applied') {
-    await input.keys.recoverExpiredReservation({
+    const recovery = await input.keys.recoverExpiredReservation({
       key: input.idempotencyKey,
       classification: 'not_applied',
       now: input.now
     });
+    if (recovery === 'in_flight') throw new ConcurrentExecutionError();
+    if (recovery !== 'failed_retryable') return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
     if (input.plan.state === 'APPROVED') {
       return { plan: input.plan, outcome: 'INTERRUPTED' };
     }
@@ -326,12 +379,14 @@ async function finishRemoteApplied(
     recoveryClassification: classification,
     occurredAt: input.now.toISOString()
   });
-  await input.keys.recoverExpiredReservation({
+  const recovery = await input.keys.recoverExpiredReservation({
     key: input.idempotencyKey,
     classification: 'applied',
     now: input.now,
     receipt
   });
+  if (recovery === 'in_flight') throw new ConcurrentExecutionError();
+  if (recovery !== 'completed') return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
   try {
     await input.keys.appendJournal({
       id: `journal:${receipt.executionId}`,
@@ -350,7 +405,7 @@ async function finishRemoteApplied(
     return { plan: input.plan, outcome: 'ALREADY_EXECUTED', receipt };
   }
   try {
-    const resolved = await recoveryTransition(input.pool, input.plan, 'RESOLVED', input.now, receipt);
+    const resolved = await recoveryTransition(input.pool, input.plan, 'RESOLVED', input.now, receipt, input.action);
     input.audit.append({
       occurredAt: input.now.toISOString(),
       type: 'execution.recovery_applied_verified',
@@ -375,7 +430,8 @@ async function recoveryTransition(
   plan: RemediationPlanRecord,
   to: RemediationPlanState,
   now: Date,
-  receipt?: ExecutionReceipt
+  receipt?: ExecutionReceipt,
+  action?: ConstrainedAction
 ): Promise<RemediationPlanRecord> {
   if (!isRecoveryTransitionAllowed(plan.state, to)) {
     throw new InvalidTransitionError(plan.id, plan.state, to);
@@ -386,9 +442,49 @@ async function recoveryTransition(
     ...(to === 'RESOLVED'
       ? {
           executedAt: now.toISOString(),
-          executionResultJson: JSON.stringify({ outcome: 'ALREADY_EXECUTED', receipt }),
-          verificationJson: JSON.stringify({ verifiedAt: now.toISOString(), result: { overallStatus: 'PASS' } })
+          executionResultJson: JSON.stringify({
+            ...executionRecord({ outcome: 'ALREADY_EXECUTED', startedAt: plan.updatedAt, finishedAt: now.toISOString() }),
+            receipt
+          }),
+          verificationJson: JSON.stringify(verificationRecord(action!, true, 'Remote postcondition verified during recovery', now))
         }
       : {})
   });
+}
+
+function executionRecord(input: {
+  outcome: 'EXECUTED' | 'ALREADY_EXECUTED' | 'FAILED' | 'RECOVERY_REQUIRED';
+  startedAt: string;
+  finishedAt: string;
+  failureReason?: RemediationExecutionResult['failureReason'];
+  failureDetail?: string;
+}): RemediationExecutionResult {
+  return {
+    outcome: input.outcome,
+    startedAt: input.startedAt,
+    finishedAt: input.finishedAt,
+    // Remote actions do not execute the SQL correction steps stored on legacy plans.
+    steps: [],
+    failureReason: input.failureReason ?? null,
+    failureDetail: input.failureDetail ?? null
+  };
+}
+
+function verificationRecord(action: ConstrainedAction, pass: boolean, detail: string, now: Date): RemediationVerification {
+  return {
+    verifiedAt: now.toISOString(),
+    result: {
+      overallStatus: pass ? 'PASS' : 'FAIL',
+      checks: [{
+        checkId: 'REMOTE_ACTION_POSTCONDITION',
+        status: pass ? 'PASS' : 'FAIL',
+        severity: pass ? 'info' : 'critical',
+        expected: 'Approved remote action postcondition',
+        actual: detail,
+        affectedRecordIds: [action.target.resourceId],
+        evidence: [],
+        remediationHint: pass ? 'No further action required' : 'Inspect remote state before authorizing another mutation'
+      }]
+    }
+  };
 }

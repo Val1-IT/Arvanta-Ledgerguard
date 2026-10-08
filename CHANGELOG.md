@@ -1,3 +1,12 @@
+## Unreleased — execution-boundary hardening
+
+- Bind remote approval to persisted action, adapter identity and source fingerprint.
+- Reject idempotency-key reuse across plans/versions; fence stale recovery updates by observed lease.
+- Persist schema-valid remote results; retain uncertain writes for recovery.
+- Add real PostgreSQL remote-control-plane round-trip coverage and explicit local-only Odoo test opt-in.
+- Add an independent evaluator guide and structured feedback template.
+- Odoo remains experimental; separate JSON-2 calls do not provide atomic preconditions.
+
 # Changelog
 
 ## 0.3.0

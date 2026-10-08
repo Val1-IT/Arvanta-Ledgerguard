@@ -74,6 +74,7 @@ export async function generateRemediationPlan(
 
   const plan: RemediationPlanRecord = {
     schemaVersion: SCHEMA_VERSION,
+    remoteActionBinding: null,
     id: idGenerator(),
     investigationId: input.investigationId,
     incidentId: investigation.incidentId,

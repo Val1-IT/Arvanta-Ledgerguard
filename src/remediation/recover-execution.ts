@@ -337,12 +337,14 @@ async function finishNotAppliedRecovery(input: {
     occurredAt: input.now.toISOString()
   });
 
-  await input.keys.recoverExpiredReservation({
+  const recovered = await input.keys.recoverExpiredReservation({
     key: input.idempotencyKey,
     classification: 'not_applied',
     now: input.now,
     receipt
   });
+  if (recovered === 'in_flight') throw new ConcurrentExecutionError();
+  if (recovered !== 'failed_retryable') return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
 
   if (input.plan.state === 'APPROVED') {
     input.audit.append({
