@@ -1,0 +1,49 @@
+name: Isolated deployment smoke
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployment-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-smoke:
+    name: Standalone startup and same-schema rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+        with:
+          path: candidate
+          persist-credentials: false
+      - name: Check out known previous candidate
+        uses: actions/checkout@v4
+        with:
+          # PR 7 candidate before private-deployment hardening; not a production release.
+          ref: 047dee30d4cfef40fffe4a936593954686775b10
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Record exact candidate and baseline
+        run: |
+          git -C candidate rev-parse HEAD
+          git -C baseline rev-parse HEAD
+      - name: Rehearse deployment on an isolated synthetic database
+        working-directory: candidate
+        run: node scripts/deployment-smoke.mjs --baseline-source ../baseline
+      - name: Remove only this validation's labeled resources if interrupted
+        if: always()
+        run: |
+          docker container ls -aq --filter label=ledgerguard.validation=isolated-deployment | xargs -r docker rm --force
+          docker volume ls -q --filter label=ledgerguard.validation=isolated-deployment | xargs -r docker volume rm
+          docker network ls -q --filter label=ledgerguard.validation=isolated-deployment | xargs -r docker network rm
+          docker image ls --format '{{.Repository}}:{{.Tag}}' --filter label=ledgerguard.validation=isolated-deployment | sort -u | xargs -r docker image rm

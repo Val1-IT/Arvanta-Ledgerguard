@@ -45,3 +45,19 @@ or waive the full-tree finding above.
 Actual Odoo server tests and JSON-2 concurrency cases must pass in the dedicated
 isolated workflow for the commit under review. Offline mock tests are not a
 substitute. No external security audit or production deployment is claimed.
+
+## Deployment boundary and development-tool containment
+
+The remaining braces advisory is reachable through development build/lint glob
+processing. Current committed Tailwind patterns are fixed, shallow patterns;
+no application HTTP/database input path into those globs was identified in the
+scoped review. Untrusted pull requests can change executable build configuration,
+so CI uses disposable hosted runners, explicit read-only token permissions,
+non-persisted checkout credentials, timeouts and cancellation of superseded runs.
+These controls do not remove the advisory or replace source review.
+
+The final standalone image must be checked for absence of braces, micromatch,
+fast-glob, Tailwind and ESLint rather than assuming the development tree equals
+the runtime. The isolated deployment workflow performs that inventory check on
+the exact built image. Do not build from unreviewed inputs on a privileged host
+or introduce production credentials into pull-request jobs.

@@ -25,7 +25,7 @@ pnpm verify:integration
 pnpm dev
 ```
 
-The committed database defaults use loopback port 5433 and synthetic data.
+The committed database defaults use loopback port 5433 and synthetic data. The example disables demo actions and external providers; only set DEMO_MODE=true for an isolated synthetic fixture when you deliberately want those actions.
 `.env` is needed for optional UI/demo settings and integrations, not the offline
 path. Never point these seed/reset commands at a non-demo database.
 

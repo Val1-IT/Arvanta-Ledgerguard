@@ -1,3 +1,11 @@
+## Unreleased — private deployment gates
+
+- Gate investigation UI actions before model, database or DataHub work; disable their controls by default.
+- Use loopback-only Compose ports and read-only/deterministic example configuration.
+- Add migration/schema-aware readiness and bounded database checks; handle idle pool disconnects without raw diagnostic logging.
+- Exclude all non-example environment files from Docker context and constrain CI tokens, credentials and timeouts.
+- Add isolated synthetic-data deployment/restart/rollback checks; this does not approve public or real-data production use.
+
 ## Unreleased — independent evaluation hardening
 
 - Preserve recovery receipt provenance and persisted receipt fields.
