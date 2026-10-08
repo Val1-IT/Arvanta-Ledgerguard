@@ -8,26 +8,25 @@ runtime dependency updates. The previous lockfile reported 15 (2 critical,
 PostCSS 8.5.23, and sharp 0.35.5. Narrow overrides are committed where an upstream
 package pins an affected transitive dependency.
 
-The full `pnpm audit --json` is **not clean**: 3 development-tree advisories
-remain, down from 40, with no critical entries:
+The full `pnpm audit --json` is **not clean**: one high development-tree advisory
+remains, down from 40. No moderate or critical entries remain in the current
+lockfile audit. The latest hardening pass applies scoped esbuild 0.25.12 and
+postcss-selector-parser 7.1.6 overrides. Generated CSS and fresh schema SQL were
+byte-identical before/after, and the legacy TypeScript loader's synchronous and
+asynchronous transforms still work.
 
 - High: braces 3.0.3, [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
-  No published patched version was available during this pass. It is reached
-  through the Tailwind/globbing tooling tree; a build-system migration or audited
-  upstream fix is needed. Avoid attacker-controlled build inputs/glob patterns.
-- Moderate: esbuild 0.18.20,
-  [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99),
-  retained by Drizzle kit's legacy loader. Do not expose development servers to
-  untrusted networks.
-- Moderate: postcss-selector-parser 6.1.4,
-  [GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf),
-  retained by Tailwind 3. A compatible upstream tooling upgrade needs separate
-  testing.
+  There is no published patched release in the checked registry/advisory. Both
+  Tailwind's tooling and Next's ESLint glob helper retain this path; upgrading
+  only Tailwind does not eliminate it. A maintained upstream fix or a separately
+  reviewed tooling replacement is needed. Avoid attacker-controlled build inputs
+  and glob patterns. No advisory suppression or vulnerable dynamic install is
+  used to make the audit appear clean.
 
-The production audit's scope does not include those development dependencies.
+The production audit's scope does not include that development dependency.
 Neither a clean advisory scan nor unit tests establish absence of vulnerabilities.
 The CI runtime audit fails on high/critical runtime advisories; it does not hide
-or waive the full-tree findings above.
+or waive the full-tree finding above.
 
 ## Safety regression coverage
 

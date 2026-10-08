@@ -55,7 +55,7 @@ DETECT (fixture or investigation) → AUTHORIZE (plan + Odoo fingerprint) → EX
 Odoo and LedgerGuard do **not** share a SQL transaction (`nativeTransactions: false`). Crash after Odoo applies the count and before LedgerGuard bookkeeping is recovered with the v0.2 reserved-key protocol:
 
 - applied (quantity is the approved target) → complete, do not adjust again
-- not_applied (still the approved pre-state) → controlled retry
+- not_applied (still the approved pre-state) → `RECOVERY_REQUIRED`; a late original request may still arrive, so keep the reservation
 - anything else → `RECOVERY_REQUIRED`, zero mutation
 
 ## Limitations
@@ -88,8 +88,9 @@ permission to choose a new action. Adapter system IDs must uniquely identify the
 trusted configured ERP instance; never let model output select the connection.
 
 An idempotency key belongs permanently to one plan and execution version. Replay
-and recovery use the original version. Resuming an INTERRUPTED plan at its newer
-version uses a new key (omit the custom key to use the version-scoped default).
+and recovery use the original version. A remote `not_applied` observation after
+lease expiry does not authorize retry or mark the plan INTERRUPTED. It cannot
+prove the original request has stopped. Automatic remote resumption is withheld.
 `ExecutionKeyConflictError` means the key belongs to another plan/version.
 `ApprovalRequiredError` for a binding mismatch means re-investigate and request
 approval, not retry with a newly fabricated fingerprint.

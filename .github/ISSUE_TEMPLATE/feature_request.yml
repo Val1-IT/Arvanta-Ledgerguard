@@ -1,0 +1,39 @@
+name: Feature or integration
+description: Propose a detector, adapter, or safety improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        LedgerGuard is experimental pre-1.0. Include the exact branch/commit you evaluated. Repair proposals come from deterministic detectors; the LLM never authors mutations.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What gap or failure mode are you trying to close?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: "Describe the current evidence gap. Examples: additional adapter failure-mode coverage, stronger state-versioning guarantees, detector aggregation, or a durable audit sink."
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Scope and tradeoffs
+      description: Explain any new authentication, publishing, policy-language, platform, or commercial-service requirements; these need an explicit maintainer decision.
+      placeholder: Confirm this is not one of those, or explain why it should be reconsidered.
+    validations:
+      required: false
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Invariants
+      options:
+        - label: This would not treat LLM/model output as execution authority.
+          required: true
+        - label: This would not add arbitrary write SQL.
+          required: true

@@ -58,7 +58,7 @@ making any safety assessment.
 
 ## Report evidence
 
-Use the [evaluation feedback issue](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=evaluation.yml).
+Use the [tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) after its template reaches the default branch. While evaluating an unmerged draft, open the [current issue picker](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new) and include the same checklist below; GitHub does not serve issue forms from an arbitrary PR branch.
 Include the commit SHA, OS, Node/pnpm versions, adapter/service version, exact
 commands, expected/actual output, and a minimal synthetic reproduction.
 Remove passwords, API keys, connection strings, customer data, and private URLs.
@@ -68,3 +68,16 @@ issue containing exploit details or private data.
 No independent adoption, production deployment, benchmark, or security audit is
 implied by the repository's own tests. Please distinguish what you ran from what
 you inspected.
+
+## Check the branch you are evaluating
+
+Record `git rev-parse HEAD` with every result. The integration hardening branch
+combines reviewed runtime work with selected community/docs changes from PR #5;
+it is a draft proposal, not a release. Do not assume a green check on an earlier
+commit applies to a newer one. Read the exact-head workflow runs linked in the PR.
+
+A remote lease expiring is not evidence that its request stopped. In particular,
+a `not_applied` recovery observation now remains `RECOVERY_REQUIRED` and does not
+authorize another call. Review the persisted original-version receipt and source
+fingerprint; if state is still uncertain, stop and ask the maintainer to reconcile
+it before proposing a new action.

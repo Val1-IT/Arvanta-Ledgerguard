@@ -68,7 +68,7 @@ PostgreSQL table `ledgerguard_execution_keys` enforces uniqueness on the executi
 
 On PostgreSQL, `completed`, `ledgerguard_execution_journal`, and the plan transitions to `VERIFYING` then `RESOLVED` are written on the **same client** as the ERP mutations, after verification PASS and before `COMMIT`. Mutation and integrity bookkeeping commit atomically. This is not exactly-once delivery, and it does not apply to adapters without native transactions.
 
-A `reserved` key whose lease has expired is recovered **before** fresh execution policy. Applied recovery requires verification PASS, plan expectations, and applied after-values — not merely a vanished incident. Never-applied in-flight plans become `INTERRUPTED`. Ambiguous leftovers return `RECOVERY_REQUIRED` with no mutation. Unexpired reservations stay `in_flight`.
+A `reserved` key whose lease has expired is recovered **before** fresh execution policy. Applied recovery requires verification PASS, plan expectations, and applied after-values — not merely a vanished incident. For the native PostgreSQL workflow, verified never-applied in-flight plans can become `INTERRUPTED`. Remote `not_applied` observations keep the reservation and return `RECOVERY_REQUIRED`, because an old remote call may still be alive. Ambiguous leftovers return `RECOVERY_REQUIRED` with no mutation. Unexpired reservations stay `in_flight`.
 
 ## DataHub
 

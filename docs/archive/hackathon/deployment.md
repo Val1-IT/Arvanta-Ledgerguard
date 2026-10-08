@@ -60,9 +60,9 @@ flowchart LR
 
 ## Environment variables
 
-Copy [`.env.example`](../.env.example) to `.env` on the VM and fill in real
+Copy [`.env.example`](../../../.env.example) to `.env` on the VM and fill in real
 values there — never commit it. See the README's
-[Environment variables](../README.md#environment-variables) section for the
+[Quickstart](../../../README.md#quickstart-one-command-local-demo) section for the
 required/optional split. No credentials are documented here.
 
 ## Startup order
@@ -100,7 +100,7 @@ disposable by design; do not store anything in it you'd need to recover.
 4. `npm run test:agent` passes against the live instance.
 5. The app's root route returns 200.
 6. `npm run scenario:conversion-error` followed by one full manual pass through
-   the demo flow (see [`docs/ui/ledgerguard-demo-flow.md`](ui/ledgerguard-demo-flow.md))
+   the demo flow (see [`docs/ui/ledgerguard-demo-flow.md`](../../ui/ledgerguard-demo-flow.md))
    completes without error, including DataHub write-back.
 7. `npm run db:reset` returns the demo to a healthy baseline.
 
@@ -110,7 +110,7 @@ disposable by design; do not store anything in it you'd need to recover.
 |---|---|---|
 | App can't reach Postgres | `DATABASE_URL` host/port mismatch between container network and host mapping | Inside `docker-compose.demo.yml`, the app must use the `postgres` service name, not `localhost` |
 | DataHub GMS never becomes healthy | Insufficient RAM/disk on the VM | Confirm the VM meets the sizing table above; DataHub OSS is resource-heavy by design |
-| DataHub write-back fails but ERP fix looks applied | Expected, documented behavior — see [`docs/architecture/overview.md`](architecture/overview.md#6-datahub-dependency-and-failure-behavior) | Not a bug; the dataset's DataHub metadata is marked stale, the ERP-side correction stands |
+| DataHub write-back fails but ERP fix looks applied | Expected, documented behavior — see [`docs/architecture/overview.md`](../../architecture/overview.md#6-datahub-dependency-and-failure-behavior) | Not a bug; the dataset's DataHub metadata is marked stale, the ERP-side correction stands |
 | `datahub` CLI prints a Python-version warning | Running Python 3.12+ instead of the recommended 3.11 | Non-blocking; verified working on 3.13 in this project's own testing |
 | Port 3000 already bound | Another process on the host | Next.js will bind the next free port automatically in `npm run dev`; for the Docker image, change the host-side port mapping in `docker-compose.demo.yml` |
 
@@ -129,4 +129,4 @@ disposable by design; do not store anything in it you'd need to recover.
 11. Verify DataHub write-back works (run the demo flow once, confirm the
     dataset's DataHub tag/notes update after a verified remediation).
 12. Capture the final URLs (app, DataHub frontend if exposed) for the
-    submission draft ([`docs/submission.md`](submission.md)).
+    submission draft ([`submission.md`](submission.md)).

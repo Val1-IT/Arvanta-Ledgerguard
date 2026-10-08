@@ -1,0 +1,63 @@
+name: Bug report
+description: Report incorrect safety or investigation behavior
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do **not** attach working exploits, credentials, or production data.
+        Security-sensitive issues belong in [SECURITY.md](https://github.com/Val1-IT/Arvanta-Ledgerguard/blob/main/SECURITY.md), not a public bug.
+        Outside testers: the [Tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) form is usually a better fit.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What should have happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, scenario (`conversion-error` / `duplicate-inventory`), and whether PostgreSQL or in-memory.
+      placeholder: |
+        pnpm demo
+        # or
+        pnpm scenario:conversion-error
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: Runtime path
+      options:
+        - In-memory demo (`pnpm demo`)
+        - PostgreSQL scenario
+        - Next.js demo UI
+        - Unit / integration tests
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety impact
+      description: Did this weaken policy, approval, idempotency, or verify-before-commit?
+      placeholder: "No / yes — describe which invariant."
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node.js version, pnpm version.
+      placeholder: "Ubuntu 24.04, Node 22.x, pnpm 9.15.9"
+    validations:
+      required: true

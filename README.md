@@ -2,7 +2,9 @@
 
 **A deterministic execution integrity runtime for AI agents operating on systems of record.**
 
-AI agents may inspect ledgers, correlate evidence, and propose repairs.
+Executable repairs come from deterministic detectors and constrained adapters; model output never grants mutation authority.
+
+AI agents may inspect ledgers, correlate evidence, and suggest investigations.
 They must not receive mutation authority merely because an LLM generated a tool call.
 
 LedgerGuard separates **probabilistic reasoning** from **deterministic execution authority**. An approved mutation is not successful until postconditions are verified against the system of record.
@@ -73,7 +75,7 @@ This is a deterministic terminal demo, not a live agent or web UI. It demonstrat
 
 **Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
 
-**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.md) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
+**Trying LedgerGuard?** [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
 
 ### Manual fallback: same in-memory demo
 
@@ -190,8 +192,10 @@ pnpm verify:integration     # migrate + Postgres integration tests
 pnpm test:datahub           # optional; needs live DataHub
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## History
 
 LedgerGuard began as a DataHub Agent Hackathon prototype. The OSS runtime extracts the deterministic engine, policy, and PostgreSQL adapter so DataHub is one optional integration rather than the product.
+
+Hackathon-era submission and deployment drafts are preserved in [the historical archive](docs/archive/hackathon/). Current evaluation instructions are in the guides above.

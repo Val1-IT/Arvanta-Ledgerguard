@@ -111,9 +111,11 @@ remote transport and human identity are explicitly test fixtures.
 | `RECOVERY_REQUIRED` | Inspect/reconcile remote state. Never automatically replay a write. |
 
 A custom idempotency key is permanently scoped to one plan and execution version.
-For replay/recovery retain the original version. For an authorized INTERRUPTED
-resume at a newer version, use a new key or the default version-scoped key.
-Do not infer rollback from a remote verification failure.
+For replay/recovery retain the original version. The native PostgreSQL workflow
+can resume an authorized INTERRUPTED plan with a new version-scoped key. Remote
+`not_applied` after lease expiry stays RECOVERY_REQUIRED because the earlier call
+may still be running. Do not create a second remote attempt or infer rollback
+from a remote verification failure.
 
 ## 5. Evaluate Odoo's opt-in atomic path
 
