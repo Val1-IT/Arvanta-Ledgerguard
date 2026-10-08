@@ -14,9 +14,6 @@ function runPnpm(args, quiet = false) {
       if (err.stdout) process.stderr.write(err.stdout);
       if (err.stderr) process.stderr.write(err.stderr);
     }
-    if (!quiet && err.message) {
-      console.error(err.message);
-    }
     process.exit(typeof err.status === 'number' ? err.status : 1);
   }
 }

@@ -29,11 +29,11 @@ Inventory 10. MOV-001 untouched.
 
 evidence → policy (`REQUIRE_APPROVAL` above threshold) → trusted authority → approval of exact plan version → idempotency → transaction → verify → commit. A second run is `DRIFT_DETECTED` / no further reversal.
 
-In-memory harness (no Docker):
+In-memory harness (no Docker). `pnpm demo` installs only `tsx`, `decimal.js`, and `zod` into `examples/inventory-ledger` (on the order of tens of MB, not the Next.js app):
 
 ```
 pnpm demo
-# or, after a full install:
+# or, after a full workspace install:
 pnpm scenario:duplicate-inventory:memory
 ```
 

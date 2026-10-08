@@ -9,14 +9,11 @@
     "demo": "tsx src/run.ts"
   },
   "dependencies": {
-    "@ledgerguard/core": "workspace:*",
-    "@ledgerguard/policy": "workspace:*",
-    "tsx": "^4.19.2"
+    "decimal.js": "^10.6.0",
+    "tsx": "^4.19.2",
+    "zod": "^3.24.1"
   },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
-  },
+  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20"
   }
