@@ -1,34 +1,42 @@
-## Unreleased — private deployment gates
-
-- Gate investigation UI actions before model, database or DataHub work; disable their controls by default.
-- Use loopback-only Compose ports and read-only/deterministic example configuration.
-- Add migration/schema-aware readiness and bounded database checks; handle idle pool disconnects without raw diagnostic logging.
-- Exclude all non-example environment files from Docker context and constrain CI tokens, credentials and timeouts.
-- Add isolated synthetic-data deployment/restart/rollback checks; this does not approve public or real-data production use.
-
-## Unreleased — independent evaluation hardening
-
-- Preserve recovery receipt provenance and persisted receipt fields.
-- Snapshot execution requests before awaiting; keep contradictory/uncertain remote outcomes recoverable.
-- Do not release remote reservations solely because an expired call currently appears not applied.
-- Patch two remaining moderate development-tool dependency paths; one unpatched high braces advisory remains explicit.
-- Reconcile PR #5 community forms, contributor guidance and historical archive into this integration branch without merging or editing that PR.
-- Run Node 20/22/24 compatibility checks, default tooling/container to Node 24, and exercise real container HTTP startup.
-
-## Unreleased — execution-boundary hardening
-
-- Bind remote approval to persisted action, adapter identity and source fingerprint.
-- Reject idempotency-key reuse across plans/versions; fence stale recovery updates by observed lease.
-- Persist schema-valid remote results; retain uncertain writes for recovery.
-- Add real PostgreSQL remote-control-plane round-trip coverage and explicit local-only Odoo test opt-in.
-- Add an independent evaluator guide and structured feedback template.
-- Odoo remains experimental; separate JSON-2 calls do not provide atomic preconditions.
-
 # Changelog
 
 ## 0.3.0
 
-Experimental Adapter SDK slice + Odoo 19 inventory adjustment. Not a general ERP connector.
+Experimental Adapter SDK slice + Odoo 19 inventory adjustment. Not a general ERP connector. Odoo is experimental and opt-in.
+
+### Onboarding
+
+- `pnpm demo` installs only `tsx`, `decimal.js` and `zod` into `examples/inventory-ledger` (tens of MB, not the Next.js workspace)
+- `pnpm demo:pg` runs the duplicate-inventory scenario against the disposable Compose PostgreSQL
+- Configurable Postgres column allowlist; an empty/`null` allowlist fails closed. Guide: `docs/try-on-your-own-table.md`
+- DEMO PASS summary at the end of the in-memory demo; `--quiet` / `LEDGERGUARD_DEMO_QUIET=1` skip JSON dumps
+- `.npmrc` sets `update-notifier=false`
+- CI matrix on Node 20/22/24 (Node 24 default), Ubuntu + Windows fresh-clone demo, container build and real HTTP startup check
+- Community files: CODE_OF_CONDUCT, YAML issue forms including a tester report form, updated CONTRIBUTING/SECURITY, hackathon material archived under `docs/archive/hackathon` (reconciled from PR #5)
+
+### Execution integrity
+
+- Bind remote approval to persisted action, adapter identity and source fingerprint
+- Reject idempotency-key reuse across plans/versions; fence stale recovery updates by observed lease
+- Persist schema-valid remote results; retain uncertain writes for recovery
+- Add real PostgreSQL remote-control-plane round-trip coverage and explicit local-only Odoo test opt-in
+- Preserve recovery receipt provenance and persisted receipt fields
+- Snapshot execution requests before awaiting; keep contradictory/uncertain remote outcomes recoverable
+- Do not release remote reservations solely because an expired call currently appears not applied
+- Reconcile migration snapshots with the applied SQL history (no applied SQL changed)
+- Add an independent evaluator guide and structured feedback template
+- Patch two remaining moderate development-tool dependency paths; one unpatched high braces advisory remains explicit
+
+### Private demo gates
+
+- Gate investigation UI actions before model, database or DataHub work; disable their controls by default
+- Use loopback-only Compose ports and read-only/deterministic example configuration
+- Add migration/schema-aware readiness and bounded database checks; handle idle pool disconnects without raw diagnostic logging
+- Exclude all non-example environment files from Docker context and constrain CI tokens, credentials and timeouts
+- Add isolated synthetic-data deployment/restart/rollback checks; this does not approve public or real-data production use
+- DEMO_MODE defaults to off and is not authentication
+
+### Adapter SDK and Odoo 19 (experimental, opt-in)
 
 - Additive `ConstrainedAction` / `ConstrainedActionAdapter` and `executeConstrainedAction`
 - Adapter capabilities: `supportsStateVersioning`, `supportsSimulation`, `supportsCompensation`
@@ -36,6 +44,10 @@ Experimental Adapter SDK slice + Odoo 19 inventory adjustment. Not a general ERP
 - HTTP 200 is not verified success; independent re-read required
 - State-bound `write_date` fingerprint; recovery classification for remote SoR
 - Default CI unchanged; Odoo live tests are opt-in
+- Optional atomic Odoo addon mode: permission checks, row locking, pre-state validation, transactional verification and durable action receipts for a narrow quant scope
+- Server-side and live JSON-2 regression suites; retain experimental scope
+- Correct container build to use the pnpm workspace and add a container CI check
+- Odoo remains experimental; separate JSON-2 calls do not provide native transactions across LedgerGuard/Odoo
 
 ## 0.2.0
 
@@ -76,10 +88,3 @@ First public-facing LedgerGuard cut (GitHub source; packages are not published t
 - Scenario: unit conversion mismatch (`1 CARTON = 12` recorded as `10`)
 - Scenario: duplicate inventory movement (receipt 10, two +10 postings)
 - Verify-before-commit with rollback on verification failure
-
-### Atomic Odoo evaluation path
-
-- Add opt-in constrained Odoo inventory addon with permission checks, row locking,
-  pre-state validation, transactional verification and durable action receipts.
-- Add server-side and live JSON-2 regression suites; retain experimental scope.
-- Correct container build to use the pnpm workspace and add a container CI check.
