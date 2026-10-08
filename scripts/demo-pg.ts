@@ -1,12 +1,8 @@
-import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { investigate } from '@ledgerguard/core';
-import { makePool, getDatabaseUrl } from '../src/db/client';
-import { waitForDatabase } from '../src/db/wait';
-import { migrateDatabase } from '../src/db/migrate';
-import { seedDatabase } from '../src/db/seed';
-import { applyDuplicateInventoryError } from '../demo-data/scenarios/duplicate-inventory';
+import { Pool } from 'pg';
+import { DemoSafetyError, initializeDemoDatabase, validateDemoTarget } from './postgres-demo-safety';
 import { loadInvestigationInput } from '../src/db/repositories/investigation';
 import { saveInvestigationRun } from '../src/db/repositories/investigation-runs';
 import { SCHEMA_VERSION as AGENT_SCHEMA_VERSION, type InvestigationRunRecord } from '../src/agent/types';
@@ -18,37 +14,20 @@ import {
 import { executeRemediationPlan } from '../src/remediation/execute';
 import { testHarnessAuthority } from '../src/remediation/trusted-authority';
 
-const DEFAULT_URL = 'postgres://ledgerguard:ledgerguard@localhost:5433/ledgerguard';
-
-function commandExists(command: string, args: string[]): boolean {
-  const result = spawnSync(command, args, { encoding: 'utf8', shell: true });
-  return result.status === 0;
-}
-
-function dockerComposeAvailable(): boolean {
-  return commandExists('docker', ['compose', 'version']) || commandExists('docker-compose', ['version']);
-}
-
-function runPnpm(script: string): void {
-  const result = spawnSync('pnpm', ['run', script], { stdio: 'inherit', shell: true });
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(`pnpm run ${script} exited ${result.status}`);
-  }
-}
-
-async function promptYes(): Promise<boolean> {
+function promptYes(question: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise<string>((resolve) => {
-    rl.question('Type yes to approve this exact plan version (anything else aborts): ', resolve);
+  return new Promise((resolve) => {
+    let answered = false;
+    rl.once('close', () => { if (!answered) resolve(false); });
+    rl.question(question, (answer) => {
+      answered = true;
+      resolve(answer.trim().toLowerCase() === 'yes');
+      rl.close();
+    });
   });
-  rl.close();
-  return answer.trim().toLowerCase() === 'yes';
 }
 
-async function seedCompletedInvestigation(pool: ReturnType<typeof makePool>): Promise<string> {
+async function seedCompletedInvestigation(pool: Pool): Promise<string> {
   const investigationId = randomUUID();
   const incidentId = `incident-${investigationId}`;
   const record: InvestigationRunRecord = {
@@ -91,78 +70,30 @@ async function seedCompletedInvestigation(pool: ReturnType<typeof makePool>): Pr
   return investigationId;
 }
 
-function missingPostgresHelp(detail: string): never {
-  console.error('DEMO:PG FAILED');
-  console.error(detail);
-  console.error(
-    [
-      'The Postgres demo needs Docker Compose, or an already-running Postgres 16 at DATABASE_URL.',
-      `Default URL: ${DEFAULT_URL}`,
-      'Install Docker Desktop / Engine, start it, and retry `pnpm demo:pg`.',
-      'Or start Postgres yourself, export DATABASE_URL, then retry.',
-      'The in-memory path needs neither: `pnpm demo`.'
-    ].join('\n')
-  );
-  process.exit(1);
-}
-
-async function ensurePostgres(): Promise<void> {
-  if (!process.env.DATABASE_URL) {
-    process.env.DATABASE_URL = DEFAULT_URL;
-  }
-
-  const dockerOk = dockerComposeAvailable();
-  if (dockerOk) {
-    console.log('Docker Compose is available; bringing up Postgres (`pnpm db:up`).');
-    try {
-      runPnpm('db:up');
-    } catch (error) {
-      missingPostgresHelp(
-        `Docker Compose failed to start Postgres: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-  } else {
-    console.log('Docker Compose is not available; looking for an already-running Postgres.');
-  }
-
-  try {
-    await waitForDatabase(dockerOk ? 60_000 : 8_000);
-  } catch (error) {
-    const last = error instanceof Error ? error.message : String(error);
-    if (dockerOk) {
-      missingPostgresHelp(`Postgres did not become ready after Compose up. ${last}`);
-    }
-    missingPostgresHelp(`Postgres is not reachable at ${getDatabaseUrl()}. ${last}`);
-  }
-}
-
 async function main(): Promise<void> {
-  console.log('LedgerGuard Postgres demo: duplicate inventory → approve → execute → verify → replay.');
-  await ensurePostgres();
+  if (process.argv.length > 2) throw new DemoSafetyError('Unknown arguments. This demo accepts no flags.');
+  const target = validateDemoTarget(process.env.DATABASE_URL);
+  console.log('LedgerGuard Postgres demo: initialize → approve → execute → verify → replay.');
+  console.log(`Disposable target: ${target.label} (credentials hidden).`);
+  console.log('Initialization creates the schema, synthetic baseline, duplicate inventory fixture, and a pending plan. It never resets an existing database.');
+  console.log('Use only a new empty local database you own, reserved exclusively for this demo. No Docker commands will run.');
+  if (!await promptYes('Type yes to initialize this empty disposable database (anything else aborts): ')) {
+    console.error('Initialization declined. No database changes were made.');
+    process.exitCode = 1;
+    return;
+  }
 
-  console.log('Migrating and seeding the disposable demo database…');
-  await migrateDatabase();
-  const pool = makePool();
+  const pool = new Pool({ connectionString: target.url, connectionTimeoutMillis: 5_000 });
+  pool.on('error', () => console.error('A background demo database connection failed. Details were withheld.'));
+  let initialized = false;
   try {
-    await seedDatabase(pool);
-    await applyDuplicateInventoryError(pool);
+    await initializeDemoDatabase(pool, target.database);
+    initialized = true;
+    console.log('Authorized initialization committed. Synthetic demo data is now stored in the database.');
 
     const report = investigate(await loadInvestigationInput(pool));
     if (report.incidentType !== 'DUPLICATE_INVENTORY_MOVEMENT') {
       throw new Error(`expected DUPLICATE_INVENTORY_MOVEMENT, got ${report.incidentType}`);
-    }
-
-    console.log('\nProposed corrections:');
-    for (const correction of report.proposedCorrections) {
-      console.log(
-        `  ${correction.sequence}. ${correction.action} ${correction.table}.${correction.field} ${correction.recordId}: ${correction.beforeValue} → ${correction.afterValue}`
-      );
-    }
-
-    const approvedByHuman = await promptYes();
-    if (!approvedByHuman) {
-      console.error('Approval declined. No mutation was applied.');
-      process.exit(1);
     }
 
     const authority = testHarnessAuthority('cli-tester');
@@ -175,6 +106,17 @@ async function main(): Promise<void> {
       planId: draft.id,
       expectedVersion: draft.version
     });
+    console.log(`\nPending plan: ${pending.id} | version: ${pending.version}`);
+    console.log('Proposed corrections:');
+    for (const correction of pending.proposedCorrections) {
+      console.log(`  ${correction.sequence}. ${correction.action} ${correction.table}.${correction.field} ${correction.recordId}: ${correction.beforeValue} → ${correction.afterValue}`);
+    }
+    if (!await promptYes('Type yes to approve this exact plan version (anything else aborts): ')) {
+      console.error('Remediation approval declined. Authorized initialization and the pending plan remain; no remediation was executed.');
+      process.exitCode = 1;
+      return;
+    }
+
     const approved = await decideRemediationPlan(
       pool,
       {
@@ -219,13 +161,22 @@ async function main(): Promise<void> {
       console.log(`Receipt status: ${executed.receipt.status}`);
     }
     console.log('------------------------------------');
-    console.log('Postgres is still running. Stop it with: pnpm db:down');
+    console.log('Demo data remains in the disposable database. Use a new empty database for another run.');
+  } catch (error) {
+    if (error instanceof DemoSafetyError) throw error;
+    throw new DemoSafetyError(initialized
+      ? 'Demo failed after authorized initialization. Demo data remains; inspect the plan and execution journal before retrying. Database error details were withheld.'
+      : 'Database initialization could not complete. No reset or cleanup was attempted. Check the local connection, catalog permissions, and disposable database before retrying. Database error details were withheld.');
   } finally {
     await pool.end();
   }
 }
 
 main().catch((error) => {
-  console.error('DEMO:PG FAILED:', error instanceof Error ? error.message : error);
-  process.exit(1);
+  console.error('DEMO:PG FAILED:', error instanceof DemoSafetyError ? error.message : 'Unexpected error. Database details were withheld.');
+  process.exitCode = 1;
+}).finally(() => {
+  // Closing readline pauses an open pipe but can leave its handle referenced.
+  // Release stdin only after all database finally blocks have completed.
+  process.stdin.destroy();
 });
