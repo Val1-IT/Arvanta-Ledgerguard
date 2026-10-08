@@ -7,6 +7,7 @@ import {
 } from '@ledgerguard/core';
 import {
   type AllowlistConfig,
+  quoteIdentifier,
   resolveAllowlist
 } from './allowlist';
 import type { Queryable } from './queryable';
@@ -34,10 +35,12 @@ export async function applyAllowlistedCorrection(
   now: Date,
   options: ApplyCorrectionOptions = {}
 ): Promise<CorrectionStepResult> {
+  // Use one identifier snapshot for both authorization and query construction.
+  const { table, field } = correction;
   const base = {
     sequence: correction.sequence,
     action: correction.action,
-    table: correction.table,
+    table,
     recordId: correction.recordId
   };
   const allowlist = resolveAllowlist(options.allowlist);
@@ -56,7 +59,7 @@ export async function applyAllowlistedCorrection(
 
   if (correction.action === 'REVERSE_INVENTORY_MOVEMENT') {
     if (!allowlist.writableColumns.inventory_movements?.has('reversed_at')) {
-      throw new UnallowlistedMutationError(correction.table, correction.field, correction.action);
+      throw new UnallowlistedMutationError(table, field, correction.action);
     }
     const { rowCount } = await client.query(
       `update inventory_movements
@@ -72,20 +75,23 @@ export async function applyAllowlistedCorrection(
     return {
       ...base,
       status: 'APPLIED',
-      detail: `${correction.field}: ${correction.beforeValue} -> ${correction.afterValue}`
+      detail: `${field}: ${correction.beforeValue} -> ${correction.afterValue}`
     };
   }
 
-  if (!allowlist.writableColumns[correction.table]?.has(correction.field)) {
-    throw new UnallowlistedMutationError(correction.table, correction.field, correction.action);
+  if (!Object.hasOwn(allowlist.writableColumns, table) ||
+      !allowlist.writableColumns[table]?.has(field)) {
+    throw new UnallowlistedMutationError(table, field, correction.action);
   }
 
-  const touchColumn = allowlist.touchTimestamps[correction.table];
-  const setClauses = [`${correction.field} = $1::numeric`];
+  const touchColumn = allowlist.touchTimestamps[table];
+  const tableIdentifier = quoteIdentifier(table);
+  const fieldIdentifier = quoteIdentifier(field);
+  const setClauses = [`${fieldIdentifier} = $1::numeric`];
   const params: unknown[] = [correction.afterValue];
   if (touchColumn) {
     params.push(now);
-    setClauses.push(`${touchColumn} = $${params.length}`);
+    setClauses.push(`${quoteIdentifier(touchColumn)} = $${params.length}`);
   }
   params.push(correction.recordId);
   const idParamIndex = params.length;
@@ -93,20 +99,20 @@ export async function applyAllowlistedCorrection(
   const guardParamIndex = params.length;
 
   const { rowCount } = await client.query(
-    `update ${correction.table} set ${setClauses.join(', ')}
-     where id = $${idParamIndex} and ${correction.field} = $${guardParamIndex}::numeric`,
+    `update ${tableIdentifier} set ${setClauses.join(', ')}
+     where id = $${idParamIndex} and ${fieldIdentifier} = $${guardParamIndex}::numeric`,
     params
   );
 
   if (rowCount !== 1) {
     throw new Error(
-      `expected to update exactly one row in ${correction.table} (id=${correction.recordId}, ${correction.field}=${correction.beforeValue}) but affected ${rowCount} — data may have drifted since the plan was approved`
+      `expected to update exactly one row in ${table} (id=${correction.recordId}, ${field}=${correction.beforeValue}) but affected ${rowCount} — data may have drifted since the plan was approved`
     );
   }
 
   return {
     ...base,
     status: 'APPLIED',
-    detail: `${correction.field}: ${correction.beforeValue} -> ${correction.afterValue}`
+    detail: `${field}: ${correction.beforeValue} -> ${correction.afterValue}`
   };
 }

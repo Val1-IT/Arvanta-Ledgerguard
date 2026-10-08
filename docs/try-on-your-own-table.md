@@ -30,6 +30,8 @@ const adapter = new PostgresSystemOfRecordAdapter(pool, { allowlist });
 
 A missing file, invalid JSON, `null`, or `{ "writableColumns": {} }` does not fall back to the demo tables.
 
+Table, writable-column, and timestamp names are exact-case SQL identifiers. Supported names start with an ASCII letter or underscore, contain only ASCII letters, digits or underscores, and are at most 63 bytes. They are quoted consistently, so `Warehouse_Bins` is distinct from `warehouse_bins`; reserved words are supported. Schema-qualified paths, spaces, embedded quotes, control characters, and overlong identifiers fail closed in both JSON and code configuration.
+
 ## 2. Propose a typed correction
 
 Your agent fills a `ProposedCorrection` (table, column, before/after, record id). It does not send SQL. A correction whose table or column is not on the allowlist throws `UnallowlistedMutationError` before any statement is issued.
