@@ -33,6 +33,8 @@ jobs:
         run: pnpm demo
       - name: Repeat demo
         run: pnpm demo
+      - name: Custom action example
+        run: pnpm example:custom --quiet
 
   unit:
     name: Unit and packages (Node ${{ matrix.node }})

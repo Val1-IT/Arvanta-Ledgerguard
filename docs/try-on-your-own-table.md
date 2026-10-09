@@ -44,4 +44,4 @@ Your agent fills a `ProposedCorrection` (table, column, before/after, record id)
 
 Add a postcondition the runtime can check on a re-read of live rows (quantity equals the approved after-value, duplicate reverse landed, and so on). Verification failure rolls the transaction back. Replay of a completed idempotency key returns `ALREADY_EXECUTED`.
 
-Wiring a new incident type also needs a detector and verification expectations in `@ledgerguard/core`; this page is only the mutation allowlist.
+Wiring a new incident type into `executeConstrainedRemediation` also needs a detector and verification expectations in `@ledgerguard/core`; this page is only the mutation allowlist. For an in-memory custom detector that stays on the public `ConstrainedAction` APIs (no core change), see [examples/custom-action](../examples/custom-action/).

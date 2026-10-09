@@ -213,7 +213,7 @@ if (allowed.outcome === 'ALLOW') {
 }
 ```
 
-The same snippet lives in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md).
+The same snippet lives in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To copy the same lifecycle onto a table you define yourself (duplicate invoice line, in memory), see [examples/custom-action](examples/custom-action/) (`pnpm example:custom`). To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md).
 
 ## Known limitations (v0.3, pre-1.0)
 
