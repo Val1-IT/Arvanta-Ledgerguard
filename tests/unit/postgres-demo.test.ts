@@ -39,7 +39,11 @@ describe('Postgres demo CLI safeguards', () => {
     'postgresql://demo:secret-canary@127.0.0.1/ledgerguard_demo_test?options=-csearch_path%3Dprivate',
     'postgresql://demo:secret-canary@127.0.0.1/ledgerguard_demo_test#fragment',
     'not-a-url-secret-canary',
-    'postgresql://demo:secret-canary@[::1]/ledgerguard_demo_test'
+    'postgresql://demo:secret-canary@[::2]/ledgerguard_demo_test',
+    'postgresql://demo:secret-canary@[::ffff:10.0.0.1]/ledgerguard_demo_test',
+    'postgresql://demo:secret-canary@[::ffff:127.0.0.1]/ledgerguard_demo_test',
+    'postgresql://demo:secret-canary@[::1]/production',
+    'postgresql://demo:secret-canary@[::1]/ledgerguard_demo_test?sslmode=disable'
   ])('rejects remote, ambiguous, or non-disposable targets without disclosing credentials (%#)', (url) => {
     const result = run('scripts/demo-pg.ts', [], url);
     expect(result.status).toBe(1);
@@ -106,6 +110,31 @@ describe('Postgres demo CLI safeguards', () => {
       if (previous === undefined) delete process.env.PGPORT;
       else process.env.PGPORT = previous;
     }
+  });
+
+  it('accepts the IPv6 loopback [::1] and connects pg to ::1 without brackets', () => {
+    const previous = process.env.PGPORT;
+    process.env.PGPORT = '6543';
+    try {
+      const target = validateDemoTarget('postgresql://demo:p%40ss@[::1]/ledgerguard_demo_target');
+      expect(target.label).toBe('[::1]:5432/ledgerguard_demo_target');
+      expect(target.database).toBe('ledgerguard_demo_target');
+      const client = new Client(target.connection);
+      const parameters = (client as unknown as { connectionParameters: { host: string; port: number; database: string; user: string; password: string } }).connectionParameters;
+      expect(parameters.host).toBe('::1');
+      expect(parameters.port).toBe(5432);
+      expect(parameters.database).toBe('ledgerguard_demo_target');
+      expect(parameters.user).toBe('demo');
+      expect(parameters.password).toBe('p@ss');
+      expect(validateDemoTarget('postgresql://demo@[::1]:6000/ledgerguard_demo_target').label).toBe('[::1]:6000/ledgerguard_demo_target');
+    } finally {
+      if (previous === undefined) delete process.env.PGPORT;
+      else process.env.PGPORT = previous;
+    }
+  });
+
+  it.each(['[::2]', '[::ffff:10.0.0.1]', '[::ffff:127.0.0.1]', '[0:0:0:0:0:0:0:2]'])('refuses non-loopback IPv6 host %s', (host) => {
+    expect(() => validateDemoTarget(`postgresql://demo@${host}/ledgerguard_demo_target`)).toThrow('DATABASE_URL must identify a local');
   });
 
   it('wrapper rejects arguments before install and never expands shell syntax', () => {

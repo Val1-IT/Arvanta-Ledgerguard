@@ -1,24 +1,45 @@
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import type { Pool } from 'pg';
+import type { Pool, PoolConfig } from 'pg';
 import { insertSeedData } from '../src/db/seed';
 import { applyDuplicateInventoryError } from '../demo-data/scenarios/duplicate-inventory';
 
 export class DemoSafetyError extends Error {}
 
-export function validateDemoTarget(value: string | undefined): { url: string; database: string; label: string } {
+// `new URL(...).hostname` keeps the brackets on IPv6 literals; `[::1]` is the
+// only IPv6 form accepted (no other IPv6 address, mapped or not).
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+export interface DemoTarget {
+  url: string;
+  database: string;
+  label: string;
+  /** Pool/Client config. pg would pass `[::1]` with brackets to the socket, so IPv6 uses discrete fields. */
+  connection: PoolConfig;
+}
+
+export function validateDemoTarget(value: string | undefined): DemoTarget {
   const message = 'DATABASE_URL must identify a local, dedicated ledgerguard_demo_ database with no query parameters or fragment. See docs/testing/postgres-demo.md.';
   let url: URL;
   try { url = new URL(value ?? ''); } catch { throw new DemoSafetyError(message); }
   const database = url.pathname.slice(1);
   if (
     !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    !['localhost', '127.0.0.1'].includes(url.hostname) ||
+    !LOOPBACK_HOSTS.includes(url.hostname) ||
     !/^ledgerguard_demo_[a-z0-9_]+$/.test(database) || database.length > 63 ||
     url.search || url.hash || /[?#]/.test(value ?? '')
   ) throw new DemoSafetyError(message);
   // pg otherwise inherits PGPORT even though the consent label shows 5432.
   url.port ||= '5432';
-  return { url: url.href, database, label: `${url.hostname}:${url.port}/${database}` };
+  const connection: PoolConfig = url.hostname === '[::1]'
+    ? {
+        host: '::1',
+        port: Number(url.port),
+        database,
+        ...(url.username ? { user: decodeURIComponent(url.username) } : {}),
+        ...(url.password ? { password: decodeURIComponent(url.password) } : {})
+      }
+    : { connectionString: url.href };
+  return { url: url.href, database, label: `${url.hostname}:${url.port}/${database}`, connection };
 }
 
 // Only the committed migration SQL is used. Ordinary migrations allow existing

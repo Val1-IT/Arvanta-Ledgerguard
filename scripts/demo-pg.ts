@@ -83,7 +83,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const pool = new Pool({ connectionString: target.url, connectionTimeoutMillis: 5_000 });
+  const pool = new Pool({ ...target.connection, connectionTimeoutMillis: 5_000 });
   pool.on('error', () => console.error('A background demo database connection failed. Details were withheld.'));
   let initialized = false;
   try {
