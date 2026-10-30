@@ -43,6 +43,7 @@ path. Never point these seed/reset commands at a non-demo database.
 - `packages/policy` — deterministic policy and `AuthorityContext`
 - `packages/postgres` — allowlisted SQL adapter
 - `packages/datahub` — optional catalog integration
+- `packages/odoo` — experimental Odoo 19 JSON-2 adapter (one constrained `stock.quant` inventory adjustment)
 - `app/` — demo UI only
 
 ## Invariants (do not weaken)
