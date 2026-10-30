@@ -28,7 +28,7 @@ Windows PowerShell:
 $env:DATABASE_URL = 'postgresql://YOUR_LOCAL_ROLE@127.0.0.1:5432/ledgerguard_demo_first_run'
 ```
 
-Use your existing local authentication configuration. Never commit credentials or paste an authenticated URL into a bug report. Only `localhost` and `127.0.0.1` are accepted; IPv6 literals are currently unsupported. URL query parameters, fragments, remote hosts, and other database names are refused. An omitted port is explicitly normalized to `5432`, regardless of `PGPORT`. A local URL is not proof of isolation if you configured port forwarding: do not use a tunnel or proxy to a remote database.
+Use your existing local authentication configuration. Never commit credentials or paste an authenticated URL into a bug report. Only `localhost`, `127.0.0.1`, and the IPv6 loopback `[::1]` are accepted; other IPv6 literals (including IPv4-mapped ones such as `[::ffff:10.0.0.1]`) are refused. URL query parameters, fragments, remote hosts, and other database names are refused. An omitted port is explicitly normalized to `5432`, regardless of `PGPORT`. A local URL is not proof of isolation if you configured port forwarding: do not use a tunnel or proxy to a remote database.
 
 ## Run the one-command demo
 
