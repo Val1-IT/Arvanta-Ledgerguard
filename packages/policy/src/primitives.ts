@@ -52,7 +52,7 @@ export const PolicyReasonSchema = z.object({
   policyId: z.string().min(1),
   code: PolicyReasonCodeSchema,
   message: z.string().min(1),
-  data: z.record(z.unknown()).optional()
+  data: z.record(z.string(), z.unknown()).optional()
 });
 
 export type PolicyReason = z.infer<typeof PolicyReasonSchema>;
