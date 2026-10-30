@@ -27,7 +27,7 @@ export const SafetyAuditEventSchema = z.object({
   type: SafetyAuditEventTypeSchema,
   actorId: z.string(),
   planId: z.string().optional(),
-  payload: z.record(z.unknown())
+  payload: z.record(z.string(), z.unknown())
 });
 
 export type SafetyAuditEvent = z.infer<typeof SafetyAuditEventSchema>;
