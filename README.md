@@ -87,7 +87,7 @@ Wiring it into your own agent? See the ~30-line [agent quickstart](examples/cust
 
 Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows.
 
-In containers/CI images `corepack enable` may fail until COREPACK_HOME is writable (e.g. `export COREPACK_HOME=/tmp/corepack`). The repo pins pnpm 9.15.9; pnpm 10 is untested.
+In containers/CI images `corepack enable` may fail until COREPACK_HOME is writable (e.g. `export COREPACK_HOME=/tmp/corepack`). If Corepack's cache is not writable while `pnpm demo` installs the example packages, the demo retries once with `npx pnpm@9.15.9` and otherwise prints the `COREPACK_HOME` fix. The repo pins pnpm 9.15.9; pnpm 10 is untested.
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
