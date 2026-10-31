@@ -32,6 +32,8 @@ Repair reverses **LINE-002 only** and restores the invoice total to **500,000**.
 
 ## Run
 
+Shortest version for your own agent: [`src/agent-quickstart.ts`](src/agent-quickstart.ts) (~30 lines: propose → require approval → approve → execute with key → retry denied; `pnpm example:quickstart`).
+
 In-memory harness (no Docker). `pnpm example:custom` installs only `tsx`, `decimal.js`, and `zod` into `examples/custom-action` (same slim nested install as `pnpm demo`):
 
 ```
