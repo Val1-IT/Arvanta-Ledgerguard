@@ -6,7 +6,8 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "demo": "tsx src/run.ts"
+    "demo": "tsx src/run.ts",
+    "quickstart": "tsx src/agent-quickstart.ts"
   },
   "dependencies": {
     "decimal.js": "^10.6.0",

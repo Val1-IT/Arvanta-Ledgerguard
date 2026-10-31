@@ -45,6 +45,7 @@
     "scenario:duplicate-inventory:memory": "node --import tsx examples/inventory-ledger/src/run.ts",
     "example:custom": "node scripts/run-custom-action-example.mjs",
     "scenario:custom-action:memory": "node --import tsx examples/custom-action/src/run.ts",
+    "example:quickstart": "node --import tsx examples/custom-action/src/agent-quickstart.ts",
     "example": "tsx scripts/generate-example.ts",
     "example:agent": "tsx scripts/generate-agent-example.ts",
     "datahub:up": "node scripts/py.mjs -m datahub docker quickstart",

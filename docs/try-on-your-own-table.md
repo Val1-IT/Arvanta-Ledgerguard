@@ -45,3 +45,5 @@ Your agent fills a `ProposedCorrection` (table, column, before/after, record id)
 Add a postcondition the runtime can check on a re-read of live rows (quantity equals the approved after-value, duplicate reverse landed, and so on). Verification failure rolls the transaction back. Replay of a completed idempotency key returns `ALREADY_EXECUTED`.
 
 Wiring a new incident type into `executeConstrainedRemediation` also needs a detector and verification expectations in `@ledgerguard/core`; this page is only the mutation allowlist. For an in-memory custom detector that stays on the public `ConstrainedAction` APIs (no core change), see [examples/custom-action](../examples/custom-action/).
+
+For the smallest end-to-end agent loop (propose, require approval, approve, execute with an idempotency key, retry denied) in about 30 lines of TypeScript, see [examples/custom-action/src/agent-quickstart.ts](../examples/custom-action/src/agent-quickstart.ts) (`pnpm example:quickstart` after `pnpm install`).

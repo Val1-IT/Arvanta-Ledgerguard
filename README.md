@@ -1,5 +1,9 @@
 # LedgerGuard
 
+[![CI](https://github.com/Val1-IT/Arvanta-Ledgerguard/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Val1-IT/Arvanta-Ledgerguard/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Val1-IT/Arvanta-Ledgerguard)](https://github.com/Val1-IT/Arvanta-Ledgerguard/releases/latest)
+
 **A deterministic execution integrity runtime for AI agents operating on systems of record.**
 
 Executable repairs come from deterministic detectors and constrained adapters; model output never grants mutation authority.
@@ -45,9 +49,39 @@ LedgerGuard separates **probabilistic reasoning** from **deterministic execution
 Optional: @ledgerguard/datahub  (catalog context only — not authority)
 ```
 
-Status: **v0.3.0 (proposed)**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. **Odoo support: experimental adapter — one constrained inventory action; not a general ERP product.** Not a production authentication or ERP platform.
+Status: **v0.3.0 (released)**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. **Odoo support: experimental adapter — one constrained inventory action; not a general ERP product.** Not a production authentication or ERP platform.
 
 License: [Apache-2.0](LICENSE)
+
+## Try it in 60 seconds
+
+No Docker, database, `.env`, or API key. Needs Node.js 24 (or 20.19+ / 22.12+) and pnpm 9.15.9.
+
+```bash
+git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
+cd Arvanta-Ledgerguard
+pnpm demo --quiet
+```
+
+Expected output (from a real run):
+
+```text
+DEMO PASS: duplicate detected; approval required; repair verified.
+Quantity: 20.000 -> 10.000 | Valuation: 1700000.00 -> 850000.00
+Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
+In-memory demonstration only; persisted idempotency and SQL transactions need the PostgreSQL integration path.
+
+---------- DEMO SUMMARY ----------
+Result: DEMO PASS
+Incident: DUPLICATE_INVENTORY_MOVEMENT
+Policy: REQUIRE_APPROVAL → ALLOW (simulated human approval of plan v2)
+Execute: committed, verification PASS
+Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
+Quantity: 20.000 → 10.000 | Valuation: 1700000.00 → 850000.00
+----------------------------------
+```
+
+Wiring it into your own agent? See the ~30-line [agent quickstart](examples/custom-action/src/agent-quickstart.ts): propose → require approval → approve → execute with an idempotency key → retry denied.
 
 ## Quickstart: one-command local demo
 
@@ -213,7 +247,7 @@ if (allowed.outcome === 'ALLOW') {
 }
 ```
 
-The same snippet lives in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To copy the same lifecycle onto a table you define yourself (duplicate invoice line, in memory), see [examples/custom-action](examples/custom-action/) (`pnpm example:custom`). To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md).
+The same snippet lives in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To copy the same lifecycle onto a table you define yourself (duplicate invoice line, in memory), see [examples/custom-action](examples/custom-action/) (`pnpm example:custom`); the minimal version is [agent-quickstart.ts](examples/custom-action/src/agent-quickstart.ts) (`pnpm example:quickstart`). To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md).
 
 ## Known limitations (v0.3, pre-1.0)
 
