@@ -1,6 +1,5 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error -- plain .mjs helper without type declarations
 import { COREPACK_HINT, PINNED_PNPM, findNpxCli, isCorepackCacheError, resolvePnpm } from '../../scripts/lib/run-pnpm.mjs';
 
 describe('demo pnpm runner', () => {
@@ -19,20 +18,20 @@ describe('demo pnpm runner', () => {
   });
 
   it('runs the launching pnpm entry through Node, never a shell', () => {
-    expect(resolvePnpm({ env: { npm_execpath: '/x/pnpm/bin/pnpm.cjs' }, platform: 'win32', execPath: 'C:/node/node.exe', npxCli: null }))
+    expect(resolvePnpm({ env: { npm_execpath: '/x/pnpm/bin/pnpm.cjs' } as unknown as NodeJS.ProcessEnv, platform: 'win32', execPath: 'C:/node/node.exe', npxCli: null }))
       .toEqual(['C:/node/node.exe', ['/x/pnpm/bin/pnpm.cjs']]);
-    expect(resolvePnpm({ env: {}, platform: 'linux', execPath: '/usr/bin/node', npxCli: null })).toEqual(['pnpm', []]);
+    expect(resolvePnpm({ env: {} as unknown as NodeJS.ProcessEnv, platform: 'linux', execPath: '/usr/bin/node', npxCli: null })).toEqual(['pnpm', []]);
   });
 
   it('falls back to npx pnpm@9.15.9 on Windows when not launched by pnpm', () => {
-    expect(resolvePnpm({ env: { npm_execpath: 'C:/npm/bin/npm-cli.js' }, platform: 'win32', execPath: 'C:/node/node.exe', npxCli: 'C:/node/npx-cli.js' }))
+    expect(resolvePnpm({ env: { npm_execpath: 'C:/npm/bin/npm-cli.js' } as unknown as NodeJS.ProcessEnv, platform: 'win32', execPath: 'C:/node/node.exe', npxCli: 'C:/node/npx-cli.js' }))
       .toEqual(['C:/node/node.exe', ['C:/node/npx-cli.js', '--yes', 'pnpm@9.15.9']]);
-    expect(resolvePnpm({ env: {}, platform: 'win32', execPath: 'C:/node/node.exe', npxCli: null })).toBeNull();
+    expect(resolvePnpm({ env: {} as unknown as NodeJS.ProcessEnv, platform: 'win32', execPath: 'C:/node/node.exe', npxCli: null })).toBeNull();
   });
 
   it('locates npx-cli.js next to Node for each platform layout', () => {
     const seen: string[] = [];
-    const exists = (p: string) => { seen.push(p); return true; };
+    const exists = (p: unknown) => { seen.push(String(p)); return true; };
     expect(findNpxCli(join('/opt', 'node', 'bin', 'node'), 'linux', exists)).toBe(join('/opt', 'node', 'lib', 'node_modules', 'npm', 'bin', 'npx-cli.js'));
     expect(findNpxCli(join('C:', 'node', 'node.exe'), 'win32', exists)).toBe(join('C:', 'node', 'node_modules', 'npm', 'bin', 'npx-cli.js'));
     expect(findNpxCli('/opt/node/bin/node', 'linux', () => false)).toBeNull();
