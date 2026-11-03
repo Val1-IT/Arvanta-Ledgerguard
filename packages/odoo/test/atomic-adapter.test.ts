@@ -10,10 +10,11 @@ const action = inventoryAdjustmentAction({
 });
 const request = {
   quant_id: 17, product_id: 3, location_id: 8, company_id: 1,
-  expected_quantity: 20, target_quantity: 10, expected_write_date: '2026-10-08 01:00:00'
+  expected_quantity: 20, target_quantity: 10, expected_write_date: '2026-10-08 01:00:00',
+  execution_key: null, fence_generation: null
 };
 const receipt = {
-  protocol: 'ledgerguard.inventory.v1', status: 'applied', replayed: false,
+  protocol: 'ledgerguard.inventory.v2', status: 'applied', replayed: false,
   request, snapshot: {
     id: 17, product_id: 3, location_id: 8, company_id: 1,
     quantity: 10, write_date: '2026-10-08 01:00:01'
@@ -34,7 +35,7 @@ describe('opt-in atomic Odoo inventory boundary', () => {
     const adapter = adapterFromTransport(server.transport, 'odoo-19', { executionMode: 'atomic-addon' });
     expect(await adapter.execute(action)).toMatchObject({ httpSucceeded: true, remoteWriteAttempted: true });
     expect(server.calls).toEqual([{ model: 'stock.quant', method: 'ledgerguard_apply_inventory', body: { request } }]);
-    expect(adapter.meta.capabilities).toMatchObject({ atomicInventoryAction: true, durableActionReceipts: true, nativeTransactions: false, idempotencyInNativeTransaction: false });
+    expect(adapter.meta.capabilities).toMatchObject({ atomicInventoryAction: true, durableActionReceipts: true, executionFencing: true, nativeTransactions: false, idempotencyInNativeTransaction: false });
   });
 
   it('keeps the atomic endpoints disabled in the default transport allowlist', () => {
@@ -112,5 +113,60 @@ describe('opt-in atomic Odoo inventory boundary', () => {
     const adapter = adapterFromTransport(server.transport, 'odoo-19', { executionMode: 'atomic-addon' });
     expect(await adapter.execute({ ...action, expectedWriteDate })).toMatchObject({ httpSucceeded: false });
     expect(server.calls).toHaveLength(0);
+  });
+});
+
+describe('Odoo execution fence (protocol v2)', () => {
+  const fence = { executionKey: 'remediation:plan-odoo-1:2', generation: 3 };
+  const fencedRequest = { ...request, execution_key: fence.executionKey, fence_generation: 3 };
+  const fencedReceipt = { ...receipt, request: fencedRequest };
+
+  it('sends the execution key and lease generation with every fenced apply', async () => {
+    const server = fake(fencedReceipt);
+    const adapter = adapterFromTransport(server.transport, 'odoo-19', { executionMode: 'atomic-addon' }).withExecutionFence(fence);
+    expect(await adapter.execute(action)).toMatchObject({ httpSucceeded: true });
+    expect(server.calls).toEqual([{ model: 'stock.quant', method: 'ledgerguard_apply_inventory', body: { request: fencedRequest } }]);
+  });
+
+  it('maps a server-side fence rejection to a no-write stale result', async () => {
+    const server = fake({ protocol: receipt.protocol, status: 'fenced', request: fencedRequest, fence_generation: 4 });
+    const adapter = adapterFromTransport(server.transport, 'odoo-19', { executionMode: 'atomic-addon' }).withExecutionFence(fence);
+    expect(await adapter.execute(action)).toMatchObject({ httpSucceeded: false, stale: true, remoteWriteAttempted: false });
+  });
+
+  it('fails closed when a fenced response is bound to another generation', async () => {
+    const server = fake({ ...fencedReceipt, request: { ...fencedRequest, fence_generation: 2 } });
+    const adapter = adapterFromTransport(server.transport, 'odoo-19', { executionMode: 'atomic-addon' }).withExecutionFence(fence);
+    expect(await adapter.execute(action)).toMatchObject({ httpSucceeded: false, recoveryRequired: true });
+  });
+
+  it('raises the fence and classifies from the bound response', async () => {
+    for (const [response, expected] of [
+      [{ protocol: receipt.protocol, status: 'not_applied', request: fencedRequest, fence_generation: 3 }, 'not_applied'],
+      [{ ...fencedReceipt, replayed: true, fence_generation: 3 }, 'applied'],
+      [{ protocol: receipt.protocol, status: 'ambiguous', request: fencedRequest, fence_generation: 3 }, 'ambiguous'],
+      [{ protocol: receipt.protocol, status: 'not_applied', request: fencedRequest, fence_generation: 2 }, 'ambiguous'],
+      [{ protocol: receipt.protocol, status: 'not_applied', request }, 'ambiguous']
+    ] as const) {
+      const server = fake(response);
+      const adapter = adapterFromTransport(server.transport, 'odoo-19', { executionMode: 'atomic-addon' });
+      expect(await adapter.raiseExecutionFence(action, fence)).toBe(expected);
+      expect(server.calls).toEqual([{ model: 'stock.quant', method: 'ledgerguard_raise_fence', body: { request: fencedRequest } }]);
+    }
+  });
+
+  it('refuses fencing in JSON-2 mode and invalid fences', () => {
+    const json2 = adapterFromTransport(async () => null);
+    expect(json2.meta.capabilities.executionFencing).toBe(false);
+    expect(() => json2.withExecutionFence(fence)).toThrow('atomic-addon');
+    const atomic = adapterFromTransport(async () => null, 'odoo-19', { executionMode: 'atomic-addon' });
+    for (const bad of [{ ...fence, generation: 0 }, { ...fence, generation: 1.5 }, { ...fence, executionKey: '' }, { ...fence, executionKey: 'has space' }, { ...fence, executionKey: 'x'.repeat(201) }]) {
+      expect(() => atomic.withExecutionFence(bad)).toThrow('Invalid execution fence');
+    }
+  });
+
+  it('keeps the raise-fence endpoint out of the JSON-2 allowlist', () => {
+    expect(() => assertAllowlistedCall('stock.quant', 'ledgerguard_raise_fence')).toThrow('rejected method');
+    expect(() => assertAllowlistedCall('stock.quant', 'ledgerguard_raise_fence', 'atomic-addon')).not.toThrow();
   });
 });

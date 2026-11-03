@@ -1,7 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { Pool } from 'pg';
 import { PostgresExecutionKeyStore, type Queryable } from '@ledgerguard/postgres';
 import { inventoryAdjustmentAction, OdooInventoryAdapter, odooQuantFingerprint } from '@ledgerguard/odoo';
+import { ConcurrentExecutionError } from '@ledgerguard/policy';
+import { adapterFromTransport } from '../../packages/odoo/src/adapter';
+import { createJson2Transport } from '../../packages/odoo/src/json2-client';
+import type { OdooJson2Transport } from '../../packages/odoo/src/types';
 import { executeRemoteConstrainedAction } from '../../src/remediation/execute-remote-action';
 import { testHarnessAuthority } from '../../src/remediation/trusted-authority';
 import { prepareRemoteActionBinding } from '../../src/remediation/remote-action-binding';
@@ -116,9 +121,22 @@ class MemoryKeys {
         planVersion: values[2],
         state: 'reserved',
         createdAt: values[3],
-        leaseExpiresAt: values[4]
+        leaseExpiresAt: values[4],
+        fenceGeneration: 1
       });
       return { rows: [{ key }], rowCount: 1 };
+    }
+    // Models `and ($N::integer is null or fence_generation = $N)` guards.
+    const generationGuard = /\(\$(\d+)::integer is null or fence_generation = \$\d+\)/.exec(sql);
+    const guardedGeneration = generationGuard ? values[Number(generationGuard[1]) - 1] : null;
+    const generationMatches = (row: Record<string, unknown>) => guardedGeneration === null || guardedGeneration === undefined || row.fenceGeneration === guardedGeneration;
+    if (sql.includes('set fence_generation = fence_generation + 1')) {
+      const row = this.rows.get(String(values[0]));
+      if (row && row.state === 'reserved' && row.fenceGeneration === values[1]) {
+        row.fenceGeneration = Number(row.fenceGeneration) + 1;
+        return { rows: [{ fenceGeneration: row.fenceGeneration }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
     }
     if (sql.includes('from ledgerguard_execution_keys where key')) {
       const row = this.rows.get(String(values[0]));
@@ -126,7 +144,7 @@ class MemoryKeys {
     }
     if (sql.includes("set state = 'completed'")) {
       const row = this.rows.get(String(values[0]));
-      if (row && row.state === 'reserved') {
+      if (row && row.state === 'reserved' && generationMatches(row)) {
         row.state = 'completed';
         return { rows: [{ key: values[0] }], rowCount: 1 };
       }
@@ -134,7 +152,7 @@ class MemoryKeys {
     }
     if (sql.includes("set state = 'failed_retryable'")) {
       const row = this.rows.get(String(values[0]));
-      if (row && row.state === 'reserved') {
+      if (row && row.state === 'reserved' && generationMatches(row)) {
         row.state = 'failed_retryable';
         return { rows: [], rowCount: 1 };
       }
@@ -236,5 +254,60 @@ describe.skipIf(!config)('Odoo 19 control-plane lifecycle', () => {
     expect(recovered.outcome).toBe('ALREADY_EXECUTED');
     expect(current().state).toBe('RESOLVED');
     expect((await adapter.readQuant(seeded.quantId)).quantity).toBe(10);
+  });
+
+  it('G: addon fence rejects a stale worker call that was in flight when its lease expired', async () => {
+    const seeded = await seedDemoQuant(config!, 20);
+    const key = `remediation:plan-odoo-live:fence-${randomUUID()}`;
+    // Hold the stale worker's apply between "sent" and "delivered to Odoo".
+    const real = createJson2Transport(config!, 'atomic-addon');
+    let releaseHeld!: () => void;
+    let heldSent = false;
+    let holdNext = true;
+    const transport: OdooJson2Transport = async (model, method, body) => {
+      if (method === 'ledgerguard_apply_inventory' && holdNext) {
+        holdNext = false;
+        heldSent = true;
+        await new Promise<void>((resolve) => { releaseHeld = resolve; });
+      }
+      return real(model, method, body);
+    };
+    const adapter = adapterFromTransport(transport, 'odoo-19', { executionMode: 'atomic-addon' });
+    const action = inventoryAdjustmentAction({
+      quantId: seeded.quantId,
+      productId: seeded.productId,
+      locationId: seeded.locationId,
+      companyId: seeded.companyId,
+      expectedQuantity: seeded.quantity,
+      targetQuantity: 10,
+      expectedWriteDate: seeded.writeDate
+    });
+    const binding = await prepareRemoteActionBinding(adapter, action);
+    const plan = planRecord('APPROVED', 2);
+    plan.remoteActionBinding = binding;
+    const { pool, current } = createPlanPool(plan);
+    const db = new MemoryKeys();
+    const keys = new PostgresExecutionKeyStore(db as unknown as Queryable);
+    const input = { planId: 'plan-odoo-live', expectedVersion: 2, action, expectedFingerprint: binding.expectedFingerprint, idempotencyKey: key };
+    const leaseStart = new Date();
+
+    const staleWorker = executeRemoteConstrainedAction(input, { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => leaseStart });
+    await expect.poll(() => heldSent).toBe(true);
+
+    // The lease expires; a recovering worker takes over generation 2 and raises the Odoo fence.
+    const afterLease = new Date(leaseStart.getTime() + 120_000);
+    const recovery = await executeRemoteConstrainedAction(input, { pool, authority: testHarnessAuthority(), adapter, executionKeys: keys, now: () => afterLease });
+    expect(recovery.outcome).toBe('INTERRUPTED');
+    expect(db.rows.get(key)).toMatchObject({ state: 'failed_retryable', fenceGeneration: 2 });
+    expect(current().state).toBe('INTERRUPTED');
+
+    // The stale call now reaches Odoo with generation 1 and is rejected inside Odoo.
+    releaseHeld();
+    await expect(staleWorker).rejects.toBeInstanceOf(ConcurrentExecutionError);
+    const after = await adapter.readQuant(seeded.quantId);
+    expect(after.quantity).toBe(20);
+    expect(after.writeDate).toBe(seeded.writeDate);
+    expect(await adapter.withExecutionFence({ executionKey: key, generation: 2 }).classifyRecovery(action)).toBe('not_applied');
+    expect(db.rows.get(key)).toMatchObject({ state: 'failed_retryable', fenceGeneration: 2 });
   });
 });

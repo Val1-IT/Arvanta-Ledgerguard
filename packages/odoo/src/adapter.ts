@@ -5,7 +5,7 @@ import {
   type StaleReservationClassification
 } from '@ledgerguard/core';
 import { INVENTORY_MODE_CONTEXT, ODOO_ATOMIC_METHODS, ODOO_JSON2_METHODS, ODOO_JSON2_MODEL, QUANT_READ_FIELDS } from './allowlist';
-import { atomicRequest, isBoundAtomicResponse, isCanonicalOdooDatetime, isVerifiedAtomicReceipt } from './atomic-protocol';
+import { atomicRequest, isBoundAtomicResponse, isCanonicalOdooDatetime, isValidExecutionFence, isVerifiedAtomicReceipt, type OdooExecutionFence } from './atomic-protocol';
 import { odooQuantFingerprint, parseQuantRecord, quantitiesEqual } from './fingerprint';
 import { createJson2Transport, guardedTransport } from './json2-client';
 import type {
@@ -34,7 +34,8 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
     capabilities: OdooAdapterCapabilities;
   };
   private readonly executionMode: OdooExecutionMode;
-  private readonly transport: OdooJson2Transport;
+  private transport: OdooJson2Transport;
+  private fence: OdooExecutionFence | undefined;
 
   constructor(config: OdooConnectionConfig, options: OdooAdapterOptions = {}) {
     this.executionMode = options.executionMode ?? 'experimental-json2';
@@ -47,9 +48,38 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
       capabilities: {
         ...ODOO_CAPABILITIES,
         atomicInventoryAction: this.executionMode === 'atomic-addon',
-        durableActionReceipts: this.executionMode === 'atomic-addon'
+        durableActionReceipts: this.executionMode === 'atomic-addon',
+        executionFencing: this.executionMode === 'atomic-addon'
       }
     };
+  }
+
+  /**
+   * A copy of this adapter whose atomic calls carry the given execution fence.
+   * Only meaningful in atomic-addon mode; JSON-2 mode has no server-side fence.
+   */
+  withExecutionFence(fence: OdooExecutionFence): OdooInventoryAdapter {
+    if (this.executionMode !== 'atomic-addon') throw new Error('Execution fencing requires the atomic-addon execution mode');
+    if (!isValidExecutionFence(fence)) throw new Error('Invalid execution fence');
+    const copy = Object.create(OdooInventoryAdapter.prototype) as OdooInventoryAdapter;
+    Object.assign(copy, this, { fence: { executionKey: fence.executionKey, generation: fence.generation } });
+    return copy;
+  }
+
+  /**
+   * Raise the Odoo-side fence for this action's execution key to
+   * `fence.generation` and report what lower generations did. The addon takes
+   * the same quant row lock as apply, so this waits for an in-flight apply.
+   */
+  async raiseExecutionFence(action: ConstrainedAction, fence: OdooExecutionFence): Promise<StaleReservationClassification> {
+    if (this.executionMode !== 'atomic-addon' || !isValidExecutionFence(fence)) return 'ambiguous';
+    const validated = validateInventoryAdjustmentAction(action);
+    if (!validated.ok || !(await this.validate(action)).ok) return 'ambiguous';
+    const inventory = validated.action;
+    const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.raiseFence, { request: atomicRequest(inventory, fence) });
+    if (!isBoundAtomicResponse(result, inventory, fence) || result.fence_generation !== fence.generation) return 'ambiguous';
+    if (isVerifiedAtomicReceipt(result, inventory, fence)) return 'applied';
+    return result.status === 'not_applied' ? 'not_applied' : 'ambiguous';
   }
 
   async readQuant(quantId: number): Promise<OdooQuantSnapshot> {
@@ -102,11 +132,14 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
     if (this.executionMode === 'atomic-addon') {
       const valid = await this.validate(action);
       if (!valid.ok) return { httpSucceeded: false, remoteWriteAttempted: false, detail: valid.reason };
-      const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.apply, { request: atomicRequest(inventory) });
-      if (isBoundAtomicResponse(result, inventory) && result.status === 'stale') {
+      const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.apply, { request: atomicRequest(inventory, this.fence) });
+      if (isBoundAtomicResponse(result, inventory, this.fence) && result.status === 'stale') {
         return { httpSucceeded: false, stale: true, remoteWriteAttempted: false, detail: 'Odoo rejected a stale inventory precondition' };
       }
-      if (!isVerifiedAtomicReceipt(result, inventory)) {
+      if (this.fence && isBoundAtomicResponse(result, inventory, this.fence) && result.status === 'fenced') {
+        return { httpSucceeded: false, stale: true, remoteWriteAttempted: false, detail: 'Odoo fenced a superseded lease generation; no changes made' };
+      }
+      if (!isVerifiedAtomicReceipt(result, inventory, this.fence)) {
         return { httpSucceeded: false, recoveryRequired: true, remoteWriteAttempted: true, detail: 'Atomic Odoo response did not prove the approved action and postcondition' };
       }
       return { httpSucceeded: true, remoteWriteAttempted: !result.replayed, detail: result.replayed ? 'Odoo replayed a durable inventory receipt' : 'Odoo atomically applied and verified inventory' };
@@ -173,9 +206,9 @@ export class OdooInventoryAdapter implements ConstrainedActionAdapter {
     const inventory = validated.action;
     if (this.executionMode === 'atomic-addon') {
       if (!(await this.validate(action)).ok) return 'ambiguous';
-      const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.status, { request: atomicRequest(inventory) });
-      if (isVerifiedAtomicReceipt(result, inventory)) return 'applied';
-      if (isBoundAtomicResponse(result, inventory) && result.status === 'not_applied') return 'not_applied';
+      const result = await this.transport(ODOO_JSON2_MODEL, ODOO_ATOMIC_METHODS.status, { request: atomicRequest(inventory, this.fence) });
+      if (isVerifiedAtomicReceipt(result, inventory, this.fence)) return 'applied';
+      if (isBoundAtomicResponse(result, inventory, this.fence) && result.status === 'not_applied') return 'not_applied';
       return 'ambiguous';
     }
     const quant = await this.readQuant(inventory.quantId);

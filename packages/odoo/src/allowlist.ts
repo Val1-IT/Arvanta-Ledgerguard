@@ -10,7 +10,8 @@ export const ODOO_JSON2_METHODS = {
 
 export const ODOO_ATOMIC_METHODS = {
   apply: 'ledgerguard_apply_inventory',
-  status: 'ledgerguard_inventory_status'
+  status: 'ledgerguard_inventory_status',
+  raiseFence: 'ledgerguard_raise_fence'
 } as const;
 const ATOMIC_METHODS = new Set<string>([ODOO_JSON2_METHODS.searchRead, ...Object.values(ODOO_ATOMIC_METHODS)]);
 

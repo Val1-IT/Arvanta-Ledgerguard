@@ -88,8 +88,9 @@ permission to choose a new action. Adapter system IDs must uniquely identify the
 trusted configured ERP instance; never let model output select the connection.
 
 An idempotency key belongs permanently to one plan and execution version. Replay
-and recovery use the original version. A remote `not_applied` observation after
-lease expiry does not authorize retry or mark the plan INTERRUPTED. It cannot
+and recovery use the original version. In the default JSON-2 mode, a remote
+`not_applied` observation after lease expiry does not authorize retry or mark
+the plan INTERRUPTED. It cannot
 prove the original request has stopped. Automatic remote resumption is withheld.
 `ExecutionKeyConflictError` means the key belongs to another plan/version.
 `ApprovalRequiredError` for a binding mismatch means re-investigate and request
@@ -100,7 +101,10 @@ approval, not retry with a newly fabricated fingerprint.
 The legacy adapter's read, write, apply, and verification calls are separate
 Odoo transactions. Another writer can change inventory between those requests.
 Client fingerprints and leases do not make the sequence atomic or fence an
-in-flight Odoo request. Do not claim serializable execution, exactly-once ERP
+in-flight Odoo request. **JSON-2 mode cannot fence:** stock Odoo has nowhere to
+store or check an execution fence, so a stale worker's already-sent request can
+still land after its lease expired. Use the atomic addon (below) when that
+matters. Do not claim serializable execution, exactly-once ERP
 effects, or verify-before-commit across that boundary. See Odoo's
 [JSON-2 transaction semantics](https://www.odoo.com/documentation/19.0/developer/reference/external_api.html#transaction).
 
@@ -132,7 +136,8 @@ instance is disposable yourself. The adapter itself is not restricted to loopbac
 
 The repository includes `addons/ledgerguard_inventory`, an optional Odoo 19
 Community addon. It exposes only two constrained methods on `stock.quant`:
-`ledgerguard_apply_inventory` and the read-only `ledgerguard_inventory_status`.
+`ledgerguard_apply_inventory`, the read-only `ledgerguard_inventory_status`, and
+`ledgerguard_raise_fence` (execution fencing, below).
 Install it only in a disposable evaluation instance first. The supplied Compose
 bootstrap installs it and runs server-side tests before starting JSON-2.
 
@@ -160,12 +165,40 @@ user, including its expected write date. They do not deduplicate across users or
 plan IDs. Recovery uses receipt provenance, not quantity alone. Receipt history
 is retained across addon uninstall/reinstall and is not automatically pruned.
 
+### Execution fence (protocol `ledgerguard.inventory.v2`)
+
+Requests carry `execution_key` and `fence_generation` (both `null` for direct,
+unfenced calls). The LedgerGuard runtime always fences addon calls with the
+execution key and its lease generation from `ledgerguard_execution_keys`.
+
+- `ledgerguard_apply_inventory` checks, under the quant row lock, the highest
+  generation recorded for this Odoo user and key in `ledgerguard_inventory_fence`.
+  A lower generation returns `status: 'fenced'` with no write and no receipt; an
+  equal or higher one records itself and continues. The fence row is part of the
+  same transaction, so a rolled-back apply does not raise it.
+- `ledgerguard_raise_fence` (same ACL checks as apply, requires a key) raises
+  the fence monotonically under the same row lock, then reports any receipt
+  written under that key by any generation: `applied`, `not_applied`, or
+  `ambiguous` if the quant changed since. An execution key bound to a different
+  action is rejected.
+- `ledgerguard_inventory_status` for a fenced request looks up receipts by key
+  (any generation) and never raises the fence.
+
+When a worker's lease expires, recovery advances the generation in PostgreSQL,
+raises the Odoo fence, and only then trusts `not_applied` (releasing the key and
+marking the plan `INTERRUPTED`). The expired worker's late call is fenced. See
+[execution integrity](../architecture/execution-integrity.md#remote-execution-fencing-odoo-atomic-addon).
+Fence rows, like receipts, are retained and not pruned. The addon version is
+`19.0.2.0.0`; upgrading creates the fence table and receipt key column.
+
 Limits remain: only the exact quant is locked, other quants may be created by
 concurrent stock activity, wire-format `write_date` is second-precision, and
 Odoo's stock internals retain their own existing maintenance privilege behavior.
 Do not infer a system-wide inventory lock or production readiness.
 
 The dedicated Odoo CI job executes the addon TransactionCase suite and then the
-legacy and atomic JSON-2 live suites sequentially on synthetic fixtures. Review
+legacy and atomic JSON-2 live suites sequentially on synthetic fixtures,
+including the lifecycle test where a lease expires while the old worker's call is
+in flight and that call is fenced. Review
 that job for the exact commit; offline TypeScript/Python tests alone do not prove
 Odoo runtime compatibility.

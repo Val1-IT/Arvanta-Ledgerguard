@@ -87,6 +87,57 @@ reload, so operators can inspect the same execution identity after recovery.
 
 For remote actions, a lease deadline is not a cancellation acknowledgement.
 Even a current `not_applied` observation cannot prove the old request will never
-arrive. The control plane therefore keeps the reservation and reports
-`RECOVERY_REQUIRED`; it does not automatically release a key or start another
-remote attempt. This intentionally differs from native transactional recovery.
+arrive. Without a remote fence, the control plane therefore keeps the reservation
+and reports `RECOVERY_REQUIRED`; it does not automatically release a key or start
+another remote attempt. This intentionally differs from native transactional
+recovery.
+
+## Remote execution fencing (Odoo atomic addon)
+
+A lease alone cannot stop a call that an expired worker has already sent: the
+check has to happen on the remote side, in the same transaction as the write.
+Adapters that advertise `capabilities.executionFencing` (today only the Odoo
+adapter in `atomic-addon` mode) get a fencing token on every mutation:
+
+1. **Generation per key.** `ledgerguard_execution_keys.fence_generation`
+   (migration `0007_execution_fence`) is 1 on first reserve and increases on
+   every re-reservation and lease takeover.
+2. **Every call carries the fence.** The worker sends `(execution_key,
+   fence_generation)` with its apply request (protocol
+   `ledgerguard.inventory.v2`). The addon keeps the highest generation per Odoo
+   user and key in `ledgerguard_inventory_fence`. Under the quant row lock, a
+   lower generation is answered with `status: 'fenced'`: no inventory write and
+   no receipt. An equal or higher one raises the fence and proceeds.
+3. **Takeover raises the fence first.** On an expired reservation, recovery
+   advances the key's generation with a compare-and-set
+   (`takeOverExpiredLease`; only one recoverer wins a given generation), then
+   calls `ledgerguard_raise_fence`. That call takes the same quant row lock, so
+   it waits for an in-flight apply to commit or roll back. After it returns,
+   no lower generation can write. Its answer is therefore final for older
+   generations:
+   - `applied` (a receipt exists for this key): complete the key, `RESOLVED`,
+     `ALREADY_EXECUTED`.
+   - `not_applied`: release the key to `failed_retryable` and mark the plan
+     `INTERRUPTED`. A later retry re-reserves at a higher generation.
+   - anything else (including a failed raise): `RECOVERY_REQUIRED`; the key
+     stays reserved.
+4. **The superseded worker cannot settle the key.** `complete`, `failRetryable`
+   and `recoverExpiredReservation` accept the caller's generation and only
+   update a key still at that generation. A worker whose call was fenced, or
+   that loses its lease after a successful apply, gets `ConcurrentExecutionError`
+   and changes nothing; the current generation owns the key and the plan.
+
+So for the fenced path, at most one write lands per execution key, even when an
+expired worker's request is still on the wire. Scope and limits:
+
+- Fencing applies only to the addon. The plain JSON-2 mode
+  (`experimental-json2`) uses separate `write` and `action_apply_inventory`
+  calls on stock Odoo, which has nowhere to keep or check a fence. It keeps the
+  conservative rule above (`RECOVERY_REQUIRED`, key stays reserved).
+- The fence is per Odoo user and execution key, like receipts. Two LedgerGuard
+  deployments using different keys for the same action are not fenced against
+  each other; the quant pre-state check still applies.
+- Direct adapter calls without a fence (`execution_key`/`fence_generation` both
+  null) are accepted as before; only the control-plane runtime adds a fence.
+- This is not exactly-once delivery or a distributed transaction: it bounds a
+  stale worker to zero writes after the raise, nothing more.
