@@ -17,6 +17,12 @@ export interface ExecutionKeyRecord {
   state: ExecutionKeyState;
   createdAt: Date | string | null;
   leaseExpiresAt: Date | string | null;
+  /**
+   * Lease generation (fencing token). 1 on first reserve; +1 on every
+   * re-reservation and lease takeover. Remote systems that support fencing
+   * reject calls carrying a lower generation for the same key.
+   */
+  fenceGeneration?: number;
 }
 
 export interface ExecutionKeyOwner {
@@ -55,7 +61,8 @@ export class PostgresExecutionKeyStore {
   async get(key: string): Promise<ExecutionKeyRecord | null> {
     const { rows } = await this.db.query(
       `select key, plan_id as "planId", plan_version as "planVersion", state,
-              created_at as "createdAt", lease_expires_at as "leaseExpiresAt"
+              created_at as "createdAt", lease_expires_at as "leaseExpiresAt",
+              fence_generation as "fenceGeneration"
          from ledgerguard_execution_keys where key = $1`,
       [key]
     );
@@ -97,7 +104,8 @@ export class PostgresExecutionKeyStore {
     const retried = await this.db.query(
       `update ledgerguard_execution_keys
           set state = 'reserved', created_at = $4,
-              completed_at = null, result_json = null, lease_expires_at = $5
+              completed_at = null, result_json = null, lease_expires_at = $5,
+              fence_generation = fence_generation + 1
         where key = $1 and state = 'failed_retryable' and plan_id = $2 and plan_version = $3
         returning key`,
       [input.key, input.planId, input.planVersion, input.now, leaseExpiresAt]
@@ -105,22 +113,57 @@ export class PostgresExecutionKeyStore {
     return (retried.rowCount ?? retried.rows.length) > 0 ? 'reserved' : 'in_flight';
   }
 
-  async complete(key: string, now: Date, result: unknown): Promise<void> {
-    await this.db.query(
+  /**
+   * Pass the generation the caller reserved with so a worker whose lease was
+   * taken over cannot settle a key it no longer owns. Returns false when no row
+   * was updated.
+   */
+  async complete(key: string, now: Date, result: unknown, fenceGeneration?: number): Promise<boolean> {
+    const updated = await this.db.query(
       `update ledgerguard_execution_keys
           set state = 'completed', completed_at = $2, result_json = $3, lease_expires_at = null
-        where key = $1 and state = 'reserved'`,
-      [key, now, JSON.stringify(result)]
+        where key = $1 and state = 'reserved'
+          and ($4::integer is null or fence_generation = $4)`,
+      [key, now, JSON.stringify(result), fenceGeneration ?? null]
     );
+    return (updated.rowCount ?? updated.rows.length) > 0;
   }
 
-  async failRetryable(key: string, now: Date, result: unknown): Promise<void> {
-    await this.db.query(
+  async failRetryable(key: string, now: Date, result: unknown, fenceGeneration?: number): Promise<boolean> {
+    const updated = await this.db.query(
       `update ledgerguard_execution_keys
           set state = 'failed_retryable', completed_at = $2, result_json = $3, lease_expires_at = null
-        where key = $1 and state = 'reserved'`,
-      [key, now, JSON.stringify(result)]
+        where key = $1 and state = 'reserved'
+          and ($4::integer is null or fence_generation = $4)`,
+      [key, now, JSON.stringify(result), fenceGeneration ?? null]
     );
+    return (updated.rowCount ?? updated.rows.length) > 0;
+  }
+
+  /**
+   * Take over an expired reservation by advancing its fence generation. The
+   * lease deadline and state are unchanged; only one caller can win a given
+   * generation. The returned generation must then be raised on the remote
+   * system before its state is trusted.
+   */
+  async takeOverExpiredLease(input: { key: string; now: Date }): Promise<
+    { outcome: 'taken_over'; fenceGeneration: number } | { outcome: 'in_flight' | 'not_reserved' }
+  > {
+    const existing = await this.get(input.key);
+    if (!existing || existing.state !== 'reserved') return { outcome: 'not_reserved' };
+    if (!this.isLeaseExpired(existing, input.now)) return { outcome: 'in_flight' };
+    const generation = Number(existing.fenceGeneration ?? 1);
+    const advanced = await this.db.query(
+      `update ledgerguard_execution_keys
+          set fence_generation = fence_generation + 1
+        where key = $1 and state = 'reserved' and fence_generation = $2
+          and lease_expires_at is not distinct from $3
+        returning fence_generation as "fenceGeneration"`,
+      [input.key, generation, existing.leaseExpiresAt]
+    );
+    const row = advanced.rows[0] as { fenceGeneration?: number } | undefined;
+    if ((advanced.rowCount ?? advanced.rows.length) === 0 || row?.fenceGeneration === undefined) return { outcome: 'in_flight' };
+    return { outcome: 'taken_over', fenceGeneration: Number(row.fenceGeneration) };
   }
 
   async appendJournal(input: {
@@ -170,6 +213,8 @@ export class PostgresExecutionKeyStore {
     classification: StaleReservationClassification;
     now: Date;
     receipt?: unknown;
+    /** When set, only settle the key if it is still at this generation. */
+    fenceGeneration?: number;
   }): Promise<StaleReservationRecovery> {
     const existing = await this.get(input.key);
     if (!existing) {
@@ -200,6 +245,7 @@ export class PostgresExecutionKeyStore {
           and plan_id = $4 and plan_version = $5
           and created_at is not distinct from $6
           and lease_expires_at is not distinct from $7
+          and ($8::integer is null or fence_generation = $8)
         returning key`,
       [
         input.key,
@@ -208,7 +254,8 @@ export class PostgresExecutionKeyStore {
         existing.planId,
         existing.planVersion,
         existing.createdAt,
-        existing.leaseExpiresAt
+        existing.leaseExpiresAt,
+        input.fenceGeneration ?? null
       ]
     );
     if ((recovered.rowCount ?? recovered.rows.length) > 0) {

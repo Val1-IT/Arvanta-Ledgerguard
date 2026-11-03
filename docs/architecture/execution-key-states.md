@@ -63,6 +63,8 @@ stateDiagram-v2
     RemoteReserved --> RemoteReserved: lease still active, ConcurrentExecutionError
 ```
 
+This is the rule for remote adapters **without** fencing (Odoo `experimental-json2`).
+
 `recoverRemoteReserved` can finish an **applied** action. For `not_applied` or
 `ambiguous`, it preserves the reservation: a delayed remote request could still
 commit after the observation. It does not automatically release the key or
@@ -71,6 +73,38 @@ remains reserved"; proven application can complete it. This diagram covers
 lease recovery only, not every normal remote execution/failure path. A remote
 post-write verification failure is not evidence of a PostgreSQL rollback.
 
+## Fenced remote actions (Odoo atomic addon)
+
+Every key also has a `fence_generation` (1 on first reserve). It is not a
+state; it identifies which worker may act on the key.
+
+```mermaid
+stateDiagram-v2
+    state "reserved (generation n)" as Rn
+    state "reserved (generation n+1)" as Rn1
+    state "completed fenced key" as FCompleted
+    state "failed_retryable fenced key" as FFailed
+    [*] --> Rn: reserve, generation 1
+    FFailed --> Rn: reserve again, generation + 1
+    Rn --> FCompleted: worker n verified, complete guarded by generation n
+    Rn --> FFailed: worker n stale or no-write failure, guarded by generation n
+    Rn --> Rn1: expired lease, takeOverExpiredLease (compare-and-set)
+    Rn1 --> FCompleted: raise fence n+1 reports applied
+    Rn1 --> FFailed: raise fence n+1 reports not_applied, plan INTERRUPTED
+    Rn1 --> Rn1: raise fails or ambiguous, RECOVERY_REQUIRED
+```
+
+- `takeOverExpiredLease` only advances an expired, still-`reserved` key whose
+  generation and lease deadline are unchanged, so concurrent recoverers get
+  distinct generations; a superseded recoverer cannot settle the key.
+- Recovery raises the Odoo fence to the new generation **before** trusting a
+  `not_applied` answer. The addon serializes the raise with any in-flight apply
+  (same quant row lock) and rejects every lower generation afterwards
+  (`status: 'fenced'`), so releasing the key cannot lead to a second write.
+- `complete`/`failRetryable`/`recoverExpiredReservation` take the caller's
+  generation. The old worker's late result therefore cannot complete or
+  release a key owned by a newer generation; it gets `ConcurrentExecutionError`.
+
 ## Code behind the arrows
 
 - [Key store and guarded updates](../../packages/postgres/src/execution-keys.ts)
@@ -78,7 +112,9 @@ post-write verification failure is not evidence of a PostgreSQL rollback.
   and [classification tests](../../packages/core/test/classify-stale-reservation.test.ts)
 - [Native execution gates and commit/failure paths](../../src/remediation/execute.ts)
 - [Native recovery](../../src/remediation/recover-execution.ts)
-- [Remote recovery](../../src/remediation/execute-remote-action.ts)
+- [Remote recovery](../../src/remediation/execute-remote-action.ts) and the
+  [fencing port](../../src/remediation/execution-fence.ts)
+- [Addon fence table and check](../../addons/ledgerguard_inventory/models/stock_quant.py)
 
 These diagrams describe current code, not exactly-once delivery or production
 readiness. See [execution integrity](execution-integrity.md) for the broader

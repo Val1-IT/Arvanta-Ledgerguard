@@ -202,7 +202,8 @@ export const ledgerguardExecutionKeys = pgTable('ledgerguard_execution_keys', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   resultJson: text('result_json'),
-  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true })
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  fenceGeneration: integer('fence_generation').notNull().default(1)
 });
 
 export const ledgerguardExecutionJournal = pgTable(

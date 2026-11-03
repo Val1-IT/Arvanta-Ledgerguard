@@ -15,7 +15,7 @@ import json
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
 
-from ..contract import PROTOCOL, action_hash, quantities_equal, validate_request
+from ..contract import PROTOCOL, action_hash, quantities_equal, validate_request, without_fence_generation
 
 
 class StockQuant(models.Model):
@@ -37,6 +37,27 @@ class StockQuant(models.Model):
                 PRIMARY KEY (user_id, action_hash)
             )
         ''')
+        self.env.cr.execute('''
+            ALTER TABLE ledgerguard_inventory_receipt
+                ADD COLUMN IF NOT EXISTS execution_key VARCHAR(200)
+        ''')
+        self.env.cr.execute('''
+            CREATE INDEX IF NOT EXISTS ledgerguard_inventory_receipt_key_idx
+                ON ledgerguard_inventory_receipt (user_id, execution_key)
+                WHERE execution_key IS NOT NULL
+        ''')
+        # Highest lease generation seen per caller and execution key. A call
+        # carrying a lower generation is fenced: no write, no receipt. Like the
+        # receipts, this table is never pruned or exposed through the ORM.
+        self.env.cr.execute('''
+            CREATE TABLE IF NOT EXISTS ledgerguard_inventory_fence (
+                user_id INTEGER NOT NULL,
+                execution_key VARCHAR(200) NOT NULL,
+                generation BIGINT NOT NULL CHECK (generation > 0),
+                updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+                PRIMARY KEY (user_id, execution_key)
+            )
+        ''')
 
     @api.model
     def ledgerguard_apply_inventory(self, request):
@@ -48,6 +69,9 @@ class StockQuant(models.Model):
         request, quant = self._ledgerguard_prepare(request)
         with self.env.cr.savepoint():
             quant._ledgerguard_lock()
+            fenced = quant._ledgerguard_check_fence(request)
+            if fenced:
+                return fenced
             prior = quant._ledgerguard_receipt(request)
             if prior:
                 return quant._ledgerguard_replay(request, prior)
@@ -78,10 +102,38 @@ class StockQuant(models.Model):
         # Odoo Repeatable Read a concurrent update may cause a retryable database
         # error, rather than incorrectly claiming an uncommitted call did nothing.
         quant._ledgerguard_lock()
+        if request['execution_key'] is not None:
+            # Fenced calls: any generation of this execution key counts.
+            prior = quant._ledgerguard_key_receipt(request)
+            if prior:
+                return dict(quant._ledgerguard_replay(prior[0], prior[1]), request=request)
+            return dict(protocol=PROTOCOL, status='not_applied', request=request)
         prior = quant._ledgerguard_receipt(request)
         if prior:
             return quant._ledgerguard_replay(request, prior)
         return dict(protocol=PROTOCOL, status='not_applied', request=request)
+
+    @api.model
+    def ledgerguard_raise_fence(self, request):
+        """Fence out every lower generation of this execution key, then report.
+
+        Takes the same quant row lock as apply, so it waits for an in-flight
+        apply to commit or roll back. Afterwards no call with a lower generation
+        can write, and the returned status is final for those generations:
+        'applied' (with its receipt), 'not_applied', or 'ambiguous'.
+        """
+        request, quant = self._ledgerguard_prepare(request)
+        if request['execution_key'] is None:
+            raise ValidationError('Raising a fence requires an execution key and generation')
+        with self.env.cr.savepoint():
+            quant._ledgerguard_lock()
+            quant._ledgerguard_advance_fence(request)
+            prior = quant._ledgerguard_key_receipt(request)
+            if prior:
+                return dict(quant._ledgerguard_replay(prior[0], prior[1]), request=request,
+                            fence_generation=request['fence_generation'])
+            return dict(protocol=PROTOCOL, status='not_applied', request=request,
+                        fence_generation=request['fence_generation'])
 
     @api.model
     def _ledgerguard_prepare(self, request):
@@ -138,13 +190,59 @@ class StockQuant(models.Model):
             raise ValidationError('LedgerGuard action receipt binding mismatch')
         return row[1]
 
+    def _ledgerguard_fence_generation(self, request):
+        self.env.cr.execute('''
+            SELECT generation FROM ledgerguard_inventory_fence
+            WHERE user_id = %s AND execution_key = %s
+            FOR UPDATE
+        ''', (self.env.uid, request['execution_key']))
+        row = self.env.cr.fetchone()
+        return row[0] if row else None
+
+    def _ledgerguard_advance_fence(self, request):
+        # Monotonic: never lowers an existing fence.
+        self.env.cr.execute('''
+            INSERT INTO ledgerguard_inventory_fence (user_id, execution_key, generation)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, execution_key) DO UPDATE
+                SET generation = GREATEST(ledgerguard_inventory_fence.generation, EXCLUDED.generation),
+                    updated_at = now()
+        ''', (self.env.uid, request['execution_key'], request['fence_generation']))
+
+    def _ledgerguard_check_fence(self, request):
+        """Return a 'fenced' response for a superseded generation, else record this one."""
+        if request['execution_key'] is None:
+            return None
+        current = self._ledgerguard_fence_generation(request)
+        if current is not None and request['fence_generation'] < current:
+            return dict(protocol=PROTOCOL, status='fenced', request=request,
+                        fence_generation=current,
+                        detail='A newer lease generation owns this execution key; no changes made')
+        self._ledgerguard_advance_fence(request)
+        return None
+
+    def _ledgerguard_key_receipt(self, request):
+        """Any receipt written under this execution key, from any generation."""
+        self.env.cr.execute('''
+            SELECT request, snapshot FROM ledgerguard_inventory_receipt
+            WHERE user_id = %s AND execution_key = %s
+            ORDER BY created_at DESC LIMIT 1
+        ''', (self.env.uid, request['execution_key']))
+        row = self.env.cr.fetchone()
+        if not row:
+            return None
+        if without_fence_generation(row[0]) != without_fence_generation(request):
+            raise ValidationError('LedgerGuard execution key is bound to a different action')
+        return row
+
     def _ledgerguard_store_receipt(self, request, snapshot):
         # The unique key is a second defense against duplicate receipts. Never
         # catch a uniqueness/serialization failure and retain an inventory write.
         self.env.cr.execute('''
-            INSERT INTO ledgerguard_inventory_receipt (user_id, action_hash, request, snapshot)
-            VALUES (%s, %s, %s::jsonb, %s::jsonb)
-        ''', (self.env.uid, action_hash(request), json.dumps(request), json.dumps(snapshot)))
+            INSERT INTO ledgerguard_inventory_receipt (user_id, action_hash, request, snapshot, execution_key)
+            VALUES (%s, %s, %s::jsonb, %s::jsonb, %s)
+        ''', (self.env.uid, action_hash(request), json.dumps(request), json.dumps(snapshot),
+              request['execution_key']))
 
     def _ledgerguard_replay(self, request, snapshot):
         current = self._ledgerguard_snapshot()

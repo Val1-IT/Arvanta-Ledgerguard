@@ -26,6 +26,7 @@ import {
 } from '@ledgerguard/policy';
 import { applyRemediationPlanTransition, loadRemediationPlan } from '../db/repositories/remediation-plans';
 import { assertRemoteActionBinding } from './remote-action-binding';
+import { supportsExecutionFencing, type ExecutionFence, type FencedRemoteAdapter } from './execution-fence';
 import {
   InvalidTransitionError,
   OptimisticConcurrencyError,
@@ -92,7 +93,8 @@ export async function executeRemoteConstrainedAction(
       idempotencyKey,
       authorityActorId: authority.actorId,
       now: now(),
-      audit
+      audit,
+      fenceGeneration: existingKey.fenceGeneration
     });
   }
 
@@ -149,6 +151,11 @@ export async function executeRemoteConstrainedAction(
     throw new InvalidTransitionError(input.planId, plan.state, 'EXECUTING');
   }
 
+  if (supportsExecutionFencing(deps.adapter)) {
+    // Reject a key the remote fence cannot carry before reserving anything.
+    deps.adapter.withExecutionFence({ executionKey: idempotencyKey, generation: 1 });
+  }
+
   const reservation = await keys.reserve({
     key: idempotencyKey,
     planId: plan.id,
@@ -162,6 +169,17 @@ export async function executeRemoteConstrainedAction(
     throw new ConcurrentExecutionError();
   }
 
+  // Fenced adapters carry (key, lease generation) on every remote call so the
+  // remote system can reject this call if our lease is taken over meanwhile.
+  let fence: ExecutionFence | undefined;
+  let executionAdapter: ConstrainedActionAdapter = deps.adapter;
+  if (supportsExecutionFencing(deps.adapter)) {
+    const reserved = await keys.get(idempotencyKey);
+    if (!reserved || reserved.state !== 'reserved') throw new ConcurrentExecutionError();
+    fence = { executionKey: idempotencyKey, generation: Number(reserved.fenceGeneration ?? 1) };
+    executionAdapter = deps.adapter.withExecutionFence(fence);
+  }
+
   let current = await applyRemediationPlanTransition(deps.pool, input.planId, input.expectedVersion, {
     state: 'EXECUTING',
     updatedAt: now().toISOString()
@@ -171,7 +189,7 @@ export async function executeRemoteConstrainedAction(
   const startedAt = current.updatedAt;
   let result: ConstrainedActionExecutionResult;
   try {
-    result = await executeConstrainedAction(deps.adapter, action, input.expectedFingerprint);
+    result = await executeConstrainedAction(executionAdapter, action, input.expectedFingerprint);
   } catch {
     // A rejected transport promise does not establish whether its remote transaction
     // committed. Keep the reservation and never automatically replay the mutation.
@@ -186,7 +204,12 @@ export async function executeRemoteConstrainedAction(
   }
 
   if (result.outcome === 'STALE') {
-    await keys.failRetryable(idempotencyKey, now(), { status: 'STALE', detail: result.detail });
+    const released = await keys.failRetryable(idempotencyKey, now(), { status: 'STALE', detail: result.detail }, fence?.generation);
+    if (fence && !released) {
+      // Our lease was taken over (and, for a fenced remote, our call was
+      // rejected). The new generation owns the key and the plan; change nothing.
+      throw new ConcurrentExecutionError();
+    }
     const failed = await applyRemediationPlanTransition(deps.pool, input.planId, current.version, {
       state: 'EXECUTION_FAILED',
       updatedAt: now().toISOString(),
@@ -229,7 +252,12 @@ export async function executeRemoteConstrainedAction(
   });
 
   if (result.verified) {
-    await keys.complete(idempotencyKey, now(), receipt);
+    const completed = await keys.complete(idempotencyKey, now(), receipt, fence?.generation);
+    if (fence && !completed) {
+      // Applied before the fence was raised; the recovering generation observes
+      // the receipt via raiseExecutionFence and settles the key and plan.
+      throw new ConcurrentExecutionError();
+    }
     await keys.appendJournal({
       id: `journal:${executionId}`,
       key: idempotencyKey,
@@ -273,7 +301,10 @@ export async function executeRemoteConstrainedAction(
 
   // Only a known no-write rejection is retryable. Failed verification is not a
   // rollback on a remote system, so do not release its execution reservation.
-  if (!result.remoteWriteAttempted) await keys.failRetryable(idempotencyKey, now(), receipt);
+  if (!result.remoteWriteAttempted) {
+    const released = await keys.failRetryable(idempotencyKey, now(), receipt, fence?.generation);
+    if (fence && !released) throw new ConcurrentExecutionError();
+  }
   const failed = await applyRemediationPlanTransition(deps.pool, input.planId, current.version, {
     state: 'EXECUTION_FAILED',
     updatedAt: now().toISOString(),
@@ -304,6 +335,9 @@ async function recoverRemoteReserved(input: {
     planId: input.plan.id,
     payload: { idempotencyKey: input.idempotencyKey }
   });
+  if (supportsExecutionFencing(input.adapter)) {
+    return recoverFencedReserved(input, input.adapter);
+  }
   const classification = await input.adapter.classifyRecovery(input.action);
   if (classification === 'applied') {
     return finishRemoteApplied(input, classification);
@@ -321,6 +355,58 @@ async function recoverRemoteReserved(input: {
   return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
 }
 
+/**
+ * Lease takeover for a fenced remote: advance the key's generation, raise the
+ * remote fence to it (which waits for any in-flight call holding the remote
+ * lock), then trust the remote answer. After the raise, the expired worker's
+ * call - even one already on the wire - is rejected by the remote system.
+ */
+async function recoverFencedReserved(
+  input: Parameters<typeof recoverRemoteReserved>[0],
+  adapter: FencedRemoteAdapter
+): Promise<ExecuteRemediationPlanResult> {
+  const takeover = await input.keys.takeOverExpiredLease({ key: input.idempotencyKey, now: input.now });
+  if (takeover.outcome !== 'taken_over') throw new ConcurrentExecutionError();
+  const fence: ExecutionFence = { executionKey: input.idempotencyKey, generation: takeover.fenceGeneration };
+  let classification: Awaited<ReturnType<typeof adapter.raiseExecutionFence>>;
+  try {
+    classification = await adapter.raiseExecutionFence(input.action, fence);
+  } catch {
+    classification = 'ambiguous';
+  }
+  if (classification === 'applied') {
+    return finishRemoteApplied({ ...input, fenceGeneration: fence.generation }, 'applied');
+  }
+  if (classification !== 'not_applied') {
+    // The fence may or may not be raised; keep the key reserved.
+    input.audit.append({
+      occurredAt: input.now.toISOString(),
+      type: 'execution.recovery_ambiguous',
+      actorId: input.authorityActorId,
+      planId: input.plan.id,
+      payload: { classification, fenceGeneration: fence.generation }
+    });
+    return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
+  }
+  // The remote system confirmed that no earlier generation wrote, and none can
+  // write from now on. Releasing the key is safe; a retry re-reserves it at a
+  // higher generation.
+  const released = await input.keys.recoverExpiredReservation({
+    key: input.idempotencyKey,
+    classification: 'not_applied',
+    now: input.now,
+    fenceGeneration: fence.generation,
+    receipt: { status: 'FENCED_NOT_APPLIED', fenceGeneration: fence.generation }
+  });
+  if (released === 'in_flight') throw new ConcurrentExecutionError();
+  if (released !== 'failed_retryable') return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
+  if (!isRecoveryTransitionAllowed(input.plan.state, 'INTERRUPTED')) {
+    return { plan: input.plan, outcome: 'INTERRUPTED' };
+  }
+  const interrupted = await recoveryTransition(input.pool, input.plan, 'INTERRUPTED', input.now);
+  return { plan: interrupted, outcome: 'INTERRUPTED' };
+}
+
 async function reconcileRemoteCompleted(input: {
   pool: Pool;
   keys: PostgresExecutionKeyStore;
@@ -332,11 +418,16 @@ async function reconcileRemoteCompleted(input: {
   authorityActorId: string;
   now: Date;
   audit: SafetyAuditLog;
+  fenceGeneration?: number;
 }): Promise<ExecuteRemediationPlanResult> {
   if (input.plan.state === 'RESOLVED') {
     return { plan: input.plan, outcome: 'ALREADY_EXECUTED' };
   }
-  const classification = await input.adapter.classifyRecovery(input.action);
+  // A fenced remote binds receipts to the execution key, so ask with it.
+  const observer = supportsExecutionFencing(input.adapter)
+    ? input.adapter.withExecutionFence({ executionKey: input.idempotencyKey, generation: Number(input.fenceGeneration ?? 1) })
+    : input.adapter;
+  const classification = await observer.classifyRecovery(input.action);
   if (classification !== 'applied') {
     return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };
   }
@@ -355,6 +446,7 @@ async function finishRemoteApplied(
     authorityActorId: string;
     now: Date;
     audit: SafetyAuditLog;
+    fenceGeneration?: number;
   },
   classification: 'applied'
 ): Promise<ExecuteRemediationPlanResult> {
@@ -380,7 +472,8 @@ async function finishRemoteApplied(
     key: input.idempotencyKey,
     classification: 'applied',
     now: input.now,
-    receipt
+    receipt,
+    fenceGeneration: input.fenceGeneration
   });
   if (recovery === 'in_flight') throw new ConcurrentExecutionError();
   if (recovery !== 'completed') return { plan: input.plan, outcome: 'RECOVERY_REQUIRED' };

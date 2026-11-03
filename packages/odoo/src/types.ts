@@ -48,4 +48,10 @@ export interface OdooAdapterCapabilities extends AdapterCapabilities {
   atomicInventoryAction: boolean;
   /** Identical normalized approved actions are deduplicated per authenticated Odoo user. */
   durableActionReceipts: boolean;
+  /**
+   * Atomic mode only: every call carries (execution key, lease generation) and
+   * the addon rejects a generation below the highest it has seen for that key,
+   * in the same Odoo transaction as the write. JSON-2 mode cannot fence.
+   */
+  executionFencing: boolean;
 }

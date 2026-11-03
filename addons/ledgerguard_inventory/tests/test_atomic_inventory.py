@@ -43,7 +43,14 @@ class TestLedgerguardAtomicInventory(TransactionCase):
             'location_id': self.location.id, 'company_id': self.company.id,
             'expected_quantity': self.quant.quantity, 'target_quantity': 10,
             'expected_write_date': fields.Datetime.to_string(self.quant.write_date),
+            'execution_key': 'remediation:plan-test:2', 'fence_generation': 1,
         }, **overrides)
+
+    def _fence(self, key='remediation:plan-test:2'):
+        self.env.cr.execute('SELECT generation FROM ledgerguard_inventory_fence WHERE user_id = %s AND execution_key = %s',
+                            (self.manager.id, key))
+        row = self.env.cr.fetchone()
+        return row[0] if row else None
 
     def _api(self, user=None):
         return self.env['stock.quant'].with_user(user or self.manager)
@@ -233,3 +240,77 @@ class TestLedgerguardAtomicInventory(TransactionCase):
             self._api().ledgerguard_apply_inventory(self._request(model='res.users'))
         self.assertEqual(self.quant.quantity, 20)
         self.assertEqual(self._receipt_count(), 0)
+
+    # -- execution fence (protocol v2) ------------------------------------
+
+    def test_late_call_from_superseded_generation_is_fenced_without_write(self):
+        stale_worker = self._request(fence_generation=1)
+        recovery = self._api().ledgerguard_raise_fence(self._request(fence_generation=2))
+        self.assertEqual(recovery['status'], 'not_applied')
+        self.assertEqual(recovery['fence_generation'], 2)
+        late = self._api().ledgerguard_apply_inventory(stale_worker)
+        self.assertEqual(late['status'], 'fenced')
+        self.assertEqual(late['fence_generation'], 2)
+        self.quant.invalidate_recordset()
+        self.assertEqual(self.quant.quantity, 20)
+        self.assertFalse(self.quant.inventory_quantity_set)
+        self.assertEqual(self._receipt_count(), 0)
+        self.assertEqual(self._fence(), 2)
+
+    def test_raise_after_committed_apply_reports_applied_and_still_fences_replays(self):
+        approved = self._request(fence_generation=1)
+        first = self._api().ledgerguard_apply_inventory(approved)
+        self.assertEqual(first['status'], 'applied')
+        recovery = self._api().ledgerguard_raise_fence(dict(approved, fence_generation=2))
+        self.assertEqual(recovery['status'], 'applied')
+        self.assertEqual(recovery['request']['fence_generation'], 2)
+        self.assertEqual(recovery['snapshot']['quantity'], 10)
+        self.assertEqual(self._api().ledgerguard_apply_inventory(approved)['status'], 'fenced')
+        self.assertEqual(self._receipt_count(), 1)
+
+    def test_fence_is_monotonic_and_current_generation_may_proceed(self):
+        self._api().ledgerguard_raise_fence(self._request(fence_generation=5))
+        self._api().ledgerguard_raise_fence(self._request(fence_generation=3))
+        self.assertEqual(self._fence(), 5)
+        self.assertEqual(self._api().ledgerguard_apply_inventory(self._request(fence_generation=4))['status'], 'fenced')
+        self.assertEqual(self._api().ledgerguard_apply_inventory(self._request(fence_generation=5))['status'], 'applied')
+
+    def test_fence_rolls_back_with_a_failed_apply(self):
+        with patch.object(type(self.quant), '_ledgerguard_store_receipt', side_effect=UserError('receipt unavailable')):
+            with self.assertRaises(UserError):
+                self._api().ledgerguard_apply_inventory(self._request(fence_generation=3))
+        self.assertIsNone(self._fence())
+
+    def test_execution_key_cannot_be_reused_for_a_different_action(self):
+        approved = self._request(fence_generation=1)
+        self._api().ledgerguard_apply_inventory(approved)
+        with self.assertRaises(ValidationError):
+            self._api().ledgerguard_raise_fence(dict(approved, fence_generation=2, target_quantity=11))
+
+    def test_fences_are_scoped_to_the_authenticated_user(self):
+        self._api().ledgerguard_raise_fence(self._request(fence_generation=9))
+        other_manager = new_test_user(self.env, login='ledgerguard-fence-other-manager',
+                                      groups='stock.group_stock_manager',
+                                      company_id=self.company.id,
+                                      company_ids=[Command.set([self.company.id])])
+        self.assertEqual(self._api(other_manager).ledgerguard_apply_inventory(self._request(fence_generation=1))['status'], 'applied')
+
+    def test_unfenced_direct_call_still_applies_and_raise_requires_a_key(self):
+        request = self._request(execution_key=None, fence_generation=None)
+        self.assertEqual(self._api().ledgerguard_apply_inventory(request)['status'], 'applied')
+        with self.assertRaises(ValidationError):
+            self._api().ledgerguard_raise_fence(request)
+
+    def test_raise_fence_requires_the_same_access_as_apply(self):
+        for api in [self.env['stock.quant'].sudo(), self._api(self.reader)]:
+            with self.assertRaises(AccessError):
+                api.ledgerguard_raise_fence(self._request(fence_generation=2))
+        self.assertIsNone(self._fence())
+
+    def test_status_for_a_fenced_key_counts_any_generation(self):
+        approved = self._request(fence_generation=1)
+        self._api().ledgerguard_apply_inventory(approved)
+        status = self._api().ledgerguard_inventory_status(dict(approved, fence_generation=4))
+        self.assertEqual(status['status'], 'applied')
+        self.assertEqual(status['request']['fence_generation'], 4)
+        self.assertEqual(self._fence(), 1)  # status never raises the fence

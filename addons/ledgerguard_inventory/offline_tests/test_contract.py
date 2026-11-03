@@ -9,7 +9,8 @@ spec.loader.exec_module(contract)
 
 REQUEST = dict(quant_id=17, product_id=3, location_id=8, company_id=1,
                expected_quantity=20, target_quantity=10,
-               expected_write_date='2026-10-08 01:00:00')
+               expected_write_date='2026-10-08 01:00:00',
+               execution_key='remediation:plan-1:2', fence_generation=1)
 
 
 class ContractTest(unittest.TestCase):
@@ -19,7 +20,8 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(contract.action_hash(request), contract.action_hash(reverse))
         for key, value in dict(quant_id=18, product_id=4, location_id=9, company_id=2,
                                expected_quantity=21, target_quantity=11,
-                               expected_write_date='2026-10-08 01:00:01').items():
+                               expected_write_date='2026-10-08 01:00:01',
+                               execution_key='remediation:plan-1:3', fence_generation=2).items():
             self.assertNotEqual(contract.action_hash(request),
                                 contract.action_hash(contract.validate_request({**REQUEST, key: value})))
 
@@ -51,6 +53,26 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(contract.action_hash(contract.validate_request({**REQUEST, 'target_quantity': 0})),
                          contract.action_hash(contract.validate_request({**REQUEST, 'target_quantity': -0.0})))
         self.assertIsNone(contract.validate_request({**REQUEST, 'company_id': None})['company_id'])
+
+    def test_protocol_is_v2(self):
+        self.assertEqual(contract.PROTOCOL, 'ledgerguard.inventory.v2')
+
+    def test_fence_fields_are_both_present_or_both_null(self):
+        unfenced = contract.validate_request({**REQUEST, 'execution_key': None, 'fence_generation': None})
+        self.assertIsNone(unfenced['execution_key'])
+        for overrides in [dict(execution_key=None), dict(fence_generation=None),
+                          dict(execution_key=''), dict(execution_key='has space'),
+                          dict(execution_key='x' * 201), dict(execution_key=7),
+                          dict(fence_generation=0), dict(fence_generation=-1), dict(fence_generation=True),
+                          dict(fence_generation=1.0), dict(fence_generation='1'), dict(fence_generation=2**53)]:
+            with self.subTest(overrides=overrides), self.assertRaises(ValueError):
+                contract.validate_request({**REQUEST, **overrides})
+
+    def test_fence_generation_is_bound_but_separable(self):
+        first = contract.validate_request(REQUEST)
+        second = contract.validate_request({**REQUEST, 'fence_generation': 2})
+        self.assertNotEqual(contract.action_hash(first), contract.action_hash(second))
+        self.assertEqual(contract.without_fence_generation(first), contract.without_fence_generation(second))
 
 
 if __name__ == '__main__':
