@@ -14,6 +14,8 @@ pnpm verify
 pnpm build
 ```
 
+**Windows:** clone to a short path. In a deeply nested folder (a path of about 280 characters), tsx can fail with `spawn ...esbuild.exe ENOENT` even though the file exists. Clone to something like `C:\lg`, or enable long paths: run `git config --global core.longpaths true` and turn on Windows' `LongPathsEnabled` setting (Group Policy, or the `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem` registry value set to `1`), then reopen the terminal. Reported by a tester in [discussion #25](https://github.com/Val1-IT/Arvanta-Ledgerguard/discussions/25#discussioncomment-19377734).
+
 Both demos must end with `DEMO PASS`. The demo uses simulated human approval;
 it is not authentication, persisted idempotency, or a production ERP proof.
 The full offline suite skips live Odoo tests. Merely having Odoo credentials
