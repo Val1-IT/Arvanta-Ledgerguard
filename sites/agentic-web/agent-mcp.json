@@ -1,0 +1,7 @@
+{
+  "protocol": "nsdeploy-agent-mcp/v1",
+  "network": "ledgerguard_policy_assistant",
+  "front_man": "ledgerguard_concierge",
+  "available": false,
+  "reason": "This is a static bundle; a public MCP facade requires an application host."
+}
