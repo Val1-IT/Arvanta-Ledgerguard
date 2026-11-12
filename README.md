@@ -4,100 +4,62 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Val1-IT/Arvanta-Ledgerguard)](https://github.com/Val1-IT/Arvanta-Ledgerguard/releases/latest)
 
-**A deterministic execution integrity runtime for AI agents operating on systems of record.**
+**Deterministic approval and verify-before-commit for AI agents that act on systems of record.**
 
-Executable repairs come from deterministic detectors and constrained adapters; model output never grants mutation authority.
+An agent may inspect a ledger, explain what it found, and propose a typed repair. It does not receive the right to post, void, or reverse a record because a model emitted a tool call. LedgerGuard decides `ALLOW`, `DENY`, or `REQUIRE_APPROVAL` in ordinary code, binds approval to one plan version, and treats the write as successful only after the system of record is read back and the postconditions pass.
 
-AI agents may inspect ledgers, correlate evidence, and suggest investigations.
-They must not receive mutation authority merely because an LLM generated a tool call.
+Status: **v0.3.0**. The offline demos run on synthetic data in memory. PostgreSQL is the transactional reference adapter. Odoo 19 is an experimental adapter for one constrained inventory action, not a general ERP product. License: [Apache-2.0](LICENSE).
 
-LedgerGuard separates **probabilistic reasoning** from **deterministic execution authority**. An approved mutation is not successful until postconditions are verified against the system of record.
+A recorded run of the commands below is in the [case study](docs/case-study.md): an agent reversing a duplicated invoice line denominated in IDR.
 
-```
-                  AI / AGENT
-                       │
-                       ▼
-             INVESTIGATION / PROPOSAL
-                       │
-                       ▼
-               @ledgerguard/core
-                       │
-                       ▼
-              @ledgerguard/policy
-             /        |        \
-          DENY   REQUIRE APPROVAL ALLOW
-                       │
-                       ▼
-               TRUSTED AUTHORITY
-                       │
-                       ▼
-                  IDEMPOTENCY
-                       │
-                       ▼
-              SYSTEM ADAPTER  (@ledgerguard/postgres)
-                       │
-                       ▼
-                  TRANSACTION
-                       │
-                       ▼
-                  VERIFICATION
-                    /      \
-                  PASS     FAIL
-                   │         │
-                 COMMIT   ROLLBACK
+## The problem
 
-Optional: @ledgerguard/datahub  (catalog context only — not authority)
+Systems of record such as an ERP keep the numbers a business will not get back easily: posted invoices, inventory receipts, journal balances. A duplicated invoice line or a doubled goods receipt changes what a customer owes and what stock is worth. The screen shows a total. It does not show which posting is the extra one, or stop a second write.
+
+An AI agent asked to "fix the books" will eventually call a mutation tool. If that call is the authority, the agent can reverse the genuine line, apply the same reversal twice, or report success because an API returned. Those writes are irreversible in the practical sense: the undo is another mutation, with its own chance to make the ledger worse.
+
+LedgerGuard is the control in front of that write.
+
+## How it works
+
+1. **Propose.** A deterministic detector, not the model, builds evidence, a typed correction, a financial impact, and the postconditions that must hold afterward. The agent does not send SQL.
+2. **Decide.** `@ledgerguard/policy` returns `ALLOW`, `DENY`, or `REQUIRE_APPROVAL`. Execution needs an approval of that exact plan version. Missing evidence, missing verification rules, a missing capability, a stale plan version, or a completed idempotency key are denials. When the impact is above the configured threshold, the decision also records `IMPACT_THRESHOLD_EXCEEDED` until that approval exists. `assertTrustedApprover` rejects `actorType: "agent"`.
+3. **Approve.** A human (or another trusted non-agent actor supplied by the host) approves one plan version. The demo simulates that approval in process. The model cannot mint `trusted_runtime` authority.
+4. **Execute and verify.** The adapter applies an allowlisted correction. On the inventory and PostgreSQL path, `executeConstrainedRemediation` re-reads state inside `runInTransaction` and returns `committed: true` only when verification is `PASS`. The PostgreSQL adapter issues `COMMIT` only after that callback returns, and `ROLLBACK` if it throws. The custom-action path (`executeConstrainedAction`) checks a fingerprint, applies the action, then verifies and reports `VERIFIED` or `VERIFICATION_FAILED`.
+5. **Refuse the replay.** A second attempt against the approved fingerprint is stale and does not mutate. A completed idempotency key is policy `DENY` with `DUPLICATE_EXECUTION`.
+
+```mermaid
+flowchart TD
+  A[Agent proposes a typed action] --> D[Detector builds evidence and a correction plan]
+  D --> P{Deterministic policy}
+  P -->|DENY| X[Stop without a mutation]
+  P -->|REQUIRE_APPROVAL| H[Human approves this plan version]
+  H --> P
+  P -->|ALLOW| E[Allowlisted adapter applies the correction]
+  E --> V{Re-read the system of record}
+  V -->|verification PASS| C[Publish the result]
+  V -->|verification FAIL| F[Withhold a successful result]
+  C --> K[Completed key: DENY DUPLICATE_EXECUTION]
 ```
 
-Status: **v0.3.0 (released)**. Demonstrates DETECT → AUTHORIZE → EXECUTE → VERIFY on synthetic data, in memory or PostgreSQL. **Odoo support: experimental adapter — one constrained inventory action; not a general ERP product.** Not a production authentication or ERP platform.
+The diagram matches `executeConstrainedRemediation`: the in-memory inventory adapter replaces its snapshot only after the transaction callback returns, and the PostgreSQL adapter commits only after that same callback returns. The invoice example in the case study uses `executeConstrainedAction`, which reports verification after the in-memory write.
 
-License: [Apache-2.0](LICENSE)
+## Quickstart
 
-## Try it in 60 seconds
-
-No Docker, database, `.env`, or API key. Needs Node.js 24 (or 20.19+ / 22.12+) and pnpm 9.15.9.
+Requires Node.js 24, or 20.19+ / 22.12+, and pnpm 9.15.9 (`packageManager` in `package.json`). No Docker, database, `.env`, or model API key.
 
 ```bash
 git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
 cd Arvanta-Ledgerguard
-pnpm demo --quiet
-```
-
-Expected output (from a real run):
-
-```text
-DEMO PASS: duplicate detected; approval required; repair verified.
-Quantity: 20.000 -> 10.000 | Valuation: 1700000.00 -> 850000.00
-Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
-In-memory demonstration only; persisted idempotency and SQL transactions need the PostgreSQL integration path.
-
----------- DEMO SUMMARY ----------
-Result: DEMO PASS
-Incident: DUPLICATE_INVENTORY_MOVEMENT
-Policy: REQUIRE_APPROVAL → ALLOW (simulated human approval of plan v2)
-Execute: committed, verification PASS
-Replay: DRIFT_DETECTED | Completed-key policy: DENY (DUPLICATE_EXECUTION)
-Quantity: 20.000 → 10.000 | Valuation: 1700000.00 → 850000.00
-----------------------------------
-```
-
-Wiring it into your own agent? See the ~30-line [agent quickstart](examples/custom-action/src/agent-quickstart.ts): propose → require approval → approve → execute with an idempotency key → retry denied.
-
-## Quickstart: one-command local demo
-
-Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows.
-
-In containers/CI images `corepack enable` may fail until COREPACK_HOME is writable (e.g. `export COREPACK_HOME=/tmp/corepack`). If Corepack's cache is not writable while `pnpm demo` installs the example packages, the demo retries once with `npx pnpm@9.15.9` and otherwise prints the `COREPACK_HOME` fix. The repo pins pnpm 9.15.9; pnpm 10 is untested.
-
-```bash
-git clone https://github.com/Val1-IT/Arvanta-Ledgerguard.git
-cd Arvanta-Ledgerguard
+pnpm install --frozen-lockfile
 pnpm demo
+pnpm example:quickstart
+pnpm verify
 ```
 
-`pnpm demo` installs only `tsx`, `decimal.js` and `zod` into `examples/inventory-ledger` (on the order of tens of MB, not the Next.js workspace), then runs the duplicate-inventory scenario with the real core and policy packages against a fresh in-memory fixture. The first install needs access to the npm registry. No Docker, `.env`, database, DataHub, or model API key is needed. Existing environment files and databases are not read or changed by the scenario. Reruns start from fresh synthetic data. Pass `--quiet` (or `LEDGERGUARD_DEMO_QUIET=1`) to skip the JSON dumps and keep the DEMO PASS summary. A local PostgreSQL instance is needed for `pnpm demo:pg`; Docker is optional for separately managed development services.
+`pnpm demo` installs `tsx`, `decimal.js`, and `zod` into `examples/inventory-ledger`, then runs the duplicate-inventory scenario. The first install needs the npm registry. Pass `--quiet` to keep the summary. The scenario exits nonzero when an expected result fails.
 
-The demo shows evidence, a proposed repair, `REQUIRE_APPROVAL`, a **simulated human approval**, and verified execution. It exits nonzero if any expected result fails. Successful output ends with:
+`pnpm demo` ends with:
 
 ```text
 DEMO PASS: duplicate detected; approval required; repair verified.
@@ -115,30 +77,24 @@ Quantity: 20.000 → 10.000 | Valuation: 1700000.00 → 850000.00
 ----------------------------------
 ```
 
-This is a deterministic terminal demo, not a live agent or web UI. It demonstrates the completed-key **policy decision**, not persisted idempotency or real SQL transactions; use `pnpm demo:pg` below to exercise those.
+`pnpm example:quickstart` is the invoice-line lifecycle in [examples/custom-action/src/agent-quickstart.ts](examples/custom-action/src/agent-quickstart.ts). A successful run prints:
 
-**Integrating an existing service?** Start with the [adoption tutorial](docs/integrations/adoption-tutorial.md) for adapter boundaries, persisted approval, outcomes, and runnable reference tests.
-
-**Independent evaluation:** follow the [external tester guide](docs/testing/external-tester-guide.md) for reproducible commands, safety checks, and honest evidence boundaries.
-
-**Trying LedgerGuard?** After `pnpm demo`, try [`pnpm demo:pg`](#postgresql-demo-optional-datahub-not-required) (a fresh local PostgreSQL database) or point the adapter at your own table with [try-on-your-own-table](docs/try-on-your-own-table.md). [Open a bug report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=bug_report.yml) or [file a tester report](https://github.com/Val1-IT/Arvanta-Ledgerguard/issues/new?template=tester_report.yml) with your OS, Node/pnpm versions, command, expected result, and sanitized output. Tell us where setup or the safety model was confusing. Report security issues through [SECURITY.md](SECURITY.md).
-
-### Manual fallback: same in-memory demo
-
-Use separate steps to diagnose an install failure or rerun without installing:
-
-```bash
-pnpm install --frozen-lockfile --prod=false
-pnpm scenario:duplicate-inventory:memory
+```text
+{
+  beforeApproval: 'REQUIRE_APPROVAL',
+  afterApproval: 'ALLOW',
+  execution: 'VERIFIED',
+  retry: 'DENY'
+}
 ```
 
-If installation fails, check registry/network access and the Node/pnpm versions, then retry. No database reset is needed.
+`pnpm verify` is typecheck, lint, and unit tests. It does not need PostgreSQL. `pnpm scenario:custom-action:memory` prints the full invoice walkthrough used in the [case study](docs/case-study.md).
 
-### PostgreSQL demo (optional, DataHub not required)
+In containers, `corepack enable` can fail until `COREPACK_HOME` is writable (`export COREPACK_HOME=/tmp/corepack`). pnpm 10 is untested.
 
-Use an already-running local PostgreSQL 16 instance and a **new empty disposable database** that you own. The demo never starts Docker or resets an existing database. See the [PostgreSQL demo setup guide](docs/testing/postgres-demo.md) for authentication, Windows commands, and safety boundaries.
+### PostgreSQL demo
 
-With PostgreSQL's CLI installed, replace `YOUR_LOCAL_ROLE` and the port with your local settings:
+Optional. Use a local PostgreSQL 16 instance and a new empty database whose name starts with `ledgerguard_demo_`. The demo accepts only explicit loopback URLs with that name prefix and no query string or fragment. Setup, prompts, and safety limits: [docs/testing/postgres-demo.md](docs/testing/postgres-demo.md).
 
 ```bash
 createdb --host=127.0.0.1 --port=5432 --username=YOUR_LOCAL_ROLE --template=template0 ledgerguard_demo_first_run
@@ -146,115 +102,73 @@ export DATABASE_URL='postgresql://YOUR_LOCAL_ROLE@127.0.0.1:5432/ledgerguard_dem
 pnpm demo:pg
 ```
 
-`pnpm demo:pg` installs locked dependencies and runs the scenario. First approve initialization of the displayed empty database. Then review the persisted pending plan's ID, version, and exact corrections before separately approving remediation. Declining initialization makes no database changes. Declining remediation preserves the authorized fixture and pending plan without executing the repair.
-
-Only explicit loopback URLs with a `ledgerguard_demo_` database name and no query parameters or fragment are accepted. Occupied databases and unknown flags are refused. Data remains after the demo; create a new empty database for each run. Do not run the separate `db:seed` or `db:setup` reset-oriented developer commands as setup for this demo.
-
-A successful run reports verified SQL execution and persisted replay:
-
-```text
-Execute: EXECUTED, verification PASS
-Replay: ALREADY_EXECUTED
-Quantity: 10.000 | Valuation: 850000.00
-```
-
-Release checks without Docker:
-
-```bash
-pnpm verify
-```
-
-PostgreSQL integration requires a **separate disposable test database**: fixtures may reset data, and demo tests require a role with `CREATEDB`. Never point these tests at retained or production data:
+Integration tests need a separate disposable database and a role with `CREATEDB`. Do not point them at data you keep:
 
 ```bash
 pnpm verify:integration
 ```
 
-## Two implemented scenarios
-
-### 1. Unit conversion mismatch
-
-`1 CARTON = 12 PCS` is silently recorded as `10`. Inventory valuation, COGS, and margin reports diverge from posted movements. LedgerGuard traces the blast radius with `decimal.js`, proposes ordered field restorations, and executes only after human approval inside a transaction that verifies before commit.
-
-### 2. Duplicate inventory movement
-
-Receipt RCP-001 received **10** units. A duplicated event posted MOV-001 **+10** and MOV-002 **+10**. Inventory shows **20** / **1,700,000**. The detector uses shared `eventIdentity` + receipt + quantity — not an LLM “these look similar” guess. Repair reverses **only MOV-002**. Expected state: quantity **10**, valuation **850,000**. A completed idempotency key returns `ALREADY_EXECUTED` and does not mutate again.
-
-These are the only detectors in v0.2. LedgerGuard does not claim to detect arbitrary ERP failures.
-
-## Packages
+## Architecture
 
 | Package | Role |
 | --- | --- |
-| `@ledgerguard/core` | Deterministic investigation, evidence, findings, effects, verification, execution contracts |
-| `@ledgerguard/policy` | Deterministic ALLOW / DENY / REQUIRE_APPROVAL, trusted `AuthorityContext`, approval and audit primitives |
-| `@ledgerguard/postgres` | Allowlisted SQL mutations and transactional execute/verify/commit |
-| `@ledgerguard/datahub` | Optional catalog context and metadata write-back |
+| `@ledgerguard/core` | Investigation, evidence, effects, verification, execution contracts |
+| `@ledgerguard/policy` | `ALLOW` / `DENY` / `REQUIRE_APPROVAL`, trusted authority, approval, audit primitives |
+| `@ledgerguard/postgres` | Allowlisted SQL mutations; `BEGIN`, verify inside the transaction, then `COMMIT` |
+| `@ledgerguard/odoo` | Experimental single inventory adjustment |
+| `@ledgerguard/datahub` | Optional catalog context and metadata write-back. Not authority |
 
-DataHub is **optional**. It must not authorize mutations, generate SQL, or declare verification success.
+The Next.js app under `app/` is a demo shell. It is not the runtime.
 
-The Next.js app under `app/` is a demo shell, not the runtime.
-
-## Demonstrated properties
-
-- No arbitrary LLM-generated SQL
-- Typed, allowlisted corrections only
-- Deterministic policy (not prompts)
-- Trusted runtime supplies capabilities; agents cannot self-approve
-- Approval is bound to plan id + version
-- Source-state fingerprint on the execution receipt
-- Persisted idempotency keys; completed replay → `ALREADY_EXECUTED`
-- PostgreSQL records `completed` in the same transaction as the verified mutation
-- Expired `reserved` keys are recovered or raised as `RECOVERY_REQUIRED`
-- `DRIFT_DETECTED` when live state no longer matches the approved snapshot
-- Verify-before-commit; verification failure rolls back
-- DataHub failure does not roll back a verified system-of-record repair
-
-See [docs/architecture/execution-integrity.md](docs/architecture/execution-integrity.md), [docs/architecture/authority-model.md](docs/architecture/authority-model.md) and [docs/threat-model.md](docs/threat-model.md).
-
-## Where your agent plugs in
-
-The agent never sends SQL and never self-approves. It produces a snapshot; LedgerGuard decides:
-
-```ts
-import { investigate, executeConstrainedRemediation } from '@ledgerguard/core';
-import { Capability, evaluateExecutionPolicy, trustedRuntimeAuthority } from '@ledgerguard/policy';
-
-const report = investigate(snapshot); // typed proposal; the agent does not write
-const authority = trustedRuntimeAuthority({
-  actorId: 'controller',
-  actorType: 'human',
-  capabilities: [Capability.remediationExecute, Capability.remediationApprove]
-});
-const policyInput = {
-  evidenceCount: report.evidence.length,
-  verificationExpectationCount: report.verificationExpectations.length,
-  impactAmount: Number(report.financialImpact.primaryExposure),
-  authority,
-  expectedVersion: 1,
-  config: { financialApprovalThreshold: 1000, currency: 'IDR' },
-  idempotencyCompleted: false
-};
-evaluateExecutionPolicy({ ...policyInput, plan: { state: 'DRAFT', version: 1, approvalAction: null, approvedBy: null } });
-// REQUIRE_APPROVAL until a human approves this exact plan version
-const allowed = evaluateExecutionPolicy({
-  ...policyInput,
-  expectedVersion: 2,
-  plan: { state: 'APPROVED', version: 2, approvalAction: 'APPROVE', approvedBy: 'controller' }
-});
-if (allowed.outcome === 'ALLOW') {
-  await executeConstrainedRemediation(adapter, { approvedCorrections: report.proposedCorrections });
-}
+```mermaid
+flowchart LR
+  subgraph untrusted [Untrusted]
+    LLM[Model output]
+  end
+  subgraph trusted [Trusted host process]
+    DET[Detectors in core]
+    POL[Policy engine]
+    ADP[System adapter]
+  end
+  subgraph sor [System of record]
+    DB[(PostgreSQL or in-memory ledger)]
+  end
+  LLM -->|proposal text only| DET
+  DET --> POL
+  POL -->|ALLOW for this plan version| ADP
+  ADP -->|allowlisted write then re-read| DB
 ```
 
-The same snippet lives in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To copy the same lifecycle onto a table you define yourself (duplicate invoice line, in memory), see [examples/custom-action](examples/custom-action/) (`pnpm example:custom`); the minimal version is [agent-quickstart.ts](examples/custom-action/src/agent-quickstart.ts) (`pnpm example:quickstart`). To point this at your own Postgres table instead of the demo inventory, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md).
+Authority has to be built by the host with `trustedRuntimeAuthority`. Parsed authority accepts `source: "trusted_runtime"` only. Detail: [authority model](docs/architecture/authority-model.md), [execution integrity](docs/architecture/execution-integrity.md), [threat model](docs/threat-model.md).
 
-## Known limitations (v0.3, pre-1.0)
+Two detectors ship in this version.
 
-- **Demo authority.** The demo mints `incident-ui` with full capabilities in server code. There is no production authentication.
-- **Not exactly-once.** PostgreSQL same-database atomicity closes the post-COMMIT reserved-key window. Other adapters and ambiguous expired reservations are not exactly-once.
-- **Detector precedence.** Conversion mismatch wins if both incidents exist. Simultaneous root causes are not aggregated.
-- **Adapter scope.** PostgreSQL remains the transactional reference adapter. Odoo 19 support is experimental and opt-in: one `stock.quant` inventory adjustment via JSON-2. See [docs/integrations/odoo.md](docs/integrations/odoo.md).
+- **Duplicate inventory movement.** Receipt `RCP-001` is 10 units. Movements `MOV-001` and `MOV-002` each post +10. The repair reverses `MOV-002` only. The quickstart prints quantity `20.000` to `10.000` and valuation `1700000.00` to `850000.00`.
+- **Duplicate invoice line** (custom-action example). Invoice `INV-1001` carries two active lines for one event. The repair reverses the later line and restores the invoice total from `1000000.00` to `500000.00`. Walkthrough: [docs/case-study.md](docs/case-study.md).
+
+A unit-conversion scenario (a carton factor of 12 recorded as 10) is implemented in the engine and traced with `decimal.js`. It is not the offline `pnpm demo` path.
+
+## Where an agent plugs in
+
+The agent produces a snapshot or a typed action. LedgerGuard decides. The short form is `pnpm example:quickstart`. The same lifecycle, with the policy call written out, is in [examples/inventory-ledger/README.md](examples/inventory-ledger/README.md). To point the Postgres adapter at a table you own, see [docs/try-on-your-own-table.md](docs/try-on-your-own-table.md) and the [adoption tutorial](docs/integrations/adoption-tutorial.md).
+
+## Why this matters
+
+A posted invoice or a goods receipt is a balance other entries depend on. The model may narrate. Deterministic code authorizes. A recorded approval covers one plan version. Success means the ledger was read back. That split is what stands between an agent and an unsupervised write.
+
+The case study is the small version of that split. Before approval the invoice plan is `REQUIRE_APPROVAL`. After a simulated human approval it is `ALLOW`, the repair verifies, and the same key is `DENY`. The duplicate receipt in `pnpm demo` does the same thing and withholds commit on a drifted replay (`DRIFT_DETECTED`, `committed: false`).
+
+## Limitations
+
+- **Demo authority.** The demos and the sample UI mint capabilities in process. There is no production authentication. A compromised host that can construct `trustedRuntimeAuthority` can approve.
+- **Simulated approval.** `pnpm demo` and the invoice scenario print `Simulating human approval`. That is a fixed fixture, not a person at a keyboard.
+- **In-memory is not a database.** Those runs do not persist idempotency keys and do not issue SQL. Persisted replay (`ALREADY_EXECUTED`) and SQL rollback belong to the PostgreSQL path, which this README's recorded run did not execute.
+- **Two execution shapes.** Inventory remediation verifies inside the transaction callback and publishes state only when verification passes. `executeConstrainedAction` (the invoice example) verifies after `execute`. A failed check returns `VERIFICATION_FAILED` with `mutated: true`. This repository does not claim that path rolls back a remote write by itself.
+- **Not exactly-once.** PostgreSQL same-database atomicity closes the post-commit reserved-key window for that adapter. Other adapters, and expired reservations whose live state is ambiguous (`RECOVERY_REQUIRED`), are not exactly-once.
+- **Narrow detectors.** Duplicate inventory, the invoice example, and the conversion-mismatch engine are specific incidents. LedgerGuard does not detect arbitrary ERP failures. When both built-in inventory incidents exist, conversion mismatch takes precedence.
+- **Odoo.** Experimental and opt-in: one `stock.quant` adjustment. See [docs/integrations/odoo.md](docs/integrations/odoo.md). Live Odoo tests skip when no live config is present.
+- **Journals.** Evidence may list journal rows. `RECONCILE_JOURNAL_ENTRIES` is not a correction target. This is not a general journal-posting or journal-editing product.
+- **Not an auditor.** The runtime does not replace accounting review, and it is not a migration tool.
 
 ## Development
 
@@ -264,25 +178,8 @@ pnpm verify:integration     # migrate + Postgres integration tests
 pnpm test:datahub           # optional; needs live DataHub
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+[CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
-## History
+Independent evaluation: [external tester guide](docs/testing/external-tester-guide.md). Historical hackathon drafts: [docs/archive/hackathon/](docs/archive/hackathon/).
 
-LedgerGuard began as a DataHub Agent Hackathon prototype. The OSS runtime extracts the deterministic engine, policy, and PostgreSQL adapter so DataHub is one optional integration rather than the product.
-
-Hackathon-era submission and deployment drafts are preserved in [the historical archive](docs/archive/hackathon/). Current evaluation instructions are in the guides above.
-
-
-## Deployment gate
-
-The shipped web UI is a **private synthetic-data evaluation app**, not a
-production identity or ERP access boundary. Compose now binds published ports to
-loopback, copied example configuration disables mutation/provider actions by
-default, and `/api/health/ready` checks connectivity plus required migrations and
-schema instead of treating a fallback HTML page as healthy.
-
-See [isolated deployment validation](docs/testing/deployment-validation.md) for
-the exact build/start/restart/rollback proof and its limits. `DEMO_MODE=true` is an
-explicit demo opt-in, not authentication. Do not expose the UI publicly or use
-real ERP/customer data without a separately reviewed identity, authorization,
-ingress, backup and migration plan.
+The shipped web UI is a private synthetic-data evaluation app. Published compose ports bind to loopback. Do not expose the UI or load real customer data without a separate identity, authorization, ingress, backup, and migration review. See [deployment validation](docs/testing/deployment-validation.md).
