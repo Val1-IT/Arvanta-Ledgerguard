@@ -1,0 +1,6 @@
+{
+  "name": "ledgerguard-agentic-web",
+  "private": true,
+  "type": "module",
+  "description": "Public Open Agentic Web site for LedgerGuard. Served as static files; not published to npm."
+}

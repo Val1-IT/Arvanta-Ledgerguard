@@ -1,0 +1,84 @@
+{
+  "brand": "LedgerGuard Assistant",
+  "networks": [
+    {
+      "name": "ledgerguard_policy_assistant",
+      "front_man": "ledgerguard_concierge",
+      "hocon": "./ledgerguard_policy_assistant.network.json",
+      "description": "Inspect the synthetic Harborlight ledger, run LedgerGuard policy checks, record human approval, and issue audit receipts.",
+      "tags": [
+        "agentified-website",
+        "policy",
+        "audit"
+      ],
+      "sample_queries": [
+        "What is the current inventory quantity and value for ITEM-001?",
+        "What policy outcome do I get if I try to execute the duplicate-repair plan right now?",
+        "Approve plan-duplicate-repair as the human operator demo-operator.",
+        "Show me the latest audit receipt.",
+        "Can you post this repair to our production Odoo?"
+      ]
+    }
+  ],
+  "llm_router": {
+    "base_url": "https://api.openai.com/v1",
+    "mock": false,
+    "byok_router": "https://api.openai.com/v1"
+  },
+  "allowed_peers": [],
+  "peer_policy": {
+    "mode": "closed",
+    "deny_origins": [],
+    "note": "Local agents and page-local actions only."
+  },
+  "agent_mcp": {
+    "protocol": "nsdeploy-agent-mcp/v1",
+    "network": "ledgerguard_policy_assistant",
+    "front_man": "ledgerguard_concierge",
+    "available": false,
+    "reason": "This is a static bundle; a public MCP facade requires an application host."
+  },
+  "theme": {
+    "primary": "#1a1d24"
+  },
+  "linking": {
+    "protocol": "nsdeploy-link/v1",
+    "exports": [
+      {
+        "network": "ledgerguard_policy_assistant",
+        "front_man": "ledgerguard_concierge",
+        "aliases": [
+          "ledgerguard_policy_assistant",
+          "ledgerguard_concierge"
+        ],
+        "url": "ledgerguard_policy_assistant"
+      }
+    ],
+    "imports": [],
+    "link_updates": {
+      "mode": "browser-local"
+    }
+  },
+  "deployment": {
+    "mode": "static",
+    "self_contained_runtime": true,
+    "browser_mock": false,
+    "direct_byok": true,
+    "direct_mcp_requires_cors": true,
+    "public_mcp_facade": false
+  },
+  "actions": {
+    "version": 1,
+    "module": "./site-actions.js",
+    "agentTools": [
+      "get_site_state",
+      "get_policies",
+      "get_receipt",
+      "evaluate_plan",
+      "reset_demo",
+      "approve_plan",
+      "reject_plan",
+      "execute_plan"
+    ]
+  }
+}

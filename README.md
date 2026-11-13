@@ -83,6 +83,17 @@ Quantity: 20.000 → 10.000 | Valuation: 1700000.00 → 850000.00
 
 Wiring it into your own agent? See the ~30-line [agent quickstart](examples/custom-action/src/agent-quickstart.ts): propose → require approval → approve → execute with an idempotency key → retry denied.
 
+## Public agentic website (Open Agentic Web)
+
+A public, browser-executed assistant for this project lives in [`sites/agentic-web/`](sites/agentic-web/). It frames LedgerGuard as deterministic policy and verification infrastructure for AI agents doing financial and ERP actions: policy checks, human `REQUIRE_APPROVAL`, and audit receipts. The console uses synthetic Harborlight Supplies data only.
+
+```bash
+pnpm demo:agentic-web
+```
+
+Then open http://127.0.0.1:8765/. The policy console works without a key. To chat, expand **BYOK / router settings** and enter your own LLM key and an OpenAI-compatible router that allows browser CORS. See [`sites/agentic-web/README.md`](sites/agentic-web/README.md) for conformance notes and the significant-update explanation for the [Open Agentic Web Challenge](https://cognizant-agenticweb.devpost.com/).
+
+
 ## Quickstart: one-command local demo
 
 Requires **Node.js 24 (or 20.19+ / 22.12+)** and **pnpm 9.15.9** (`npm install --global pnpm@9.15.9` if needed). Run these commands in a terminal, including PowerShell on Windows.

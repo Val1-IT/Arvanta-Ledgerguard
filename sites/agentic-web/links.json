@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "networks": {
+    "ledgerguard_policy_assistant": {}
+  }
+}

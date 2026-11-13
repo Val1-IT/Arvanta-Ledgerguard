@@ -1,0 +1,18 @@
+{
+  "protocol": "nsdeploy-link/v1",
+  "exports": [
+    {
+      "network": "ledgerguard_policy_assistant",
+      "front_man": "ledgerguard_concierge",
+      "aliases": [
+        "ledgerguard_policy_assistant",
+        "ledgerguard_concierge"
+      ],
+      "url": "ledgerguard_policy_assistant"
+    }
+  ],
+  "imports": [],
+  "link_updates": {
+    "mode": "browser-local"
+  }
+}
