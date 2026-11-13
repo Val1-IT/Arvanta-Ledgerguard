@@ -11,8 +11,10 @@
   <script type="module" src="site.js"></script>
 </head>
 <body>
+  <a class="skip" href="#main">Skip to content</a>
   <a class="skip" href="#console">Skip to the policy console</a>
-  <div class="banner">Synthetic demo only. Harborlight Supplies is a fictional tenant. No real customer, Arvanta, or Cheermol data is used. The ledger lives in this tab until you reset or reload.</div>
+  <a class="skip" href="#assistant">Skip to the assistant</a>
+  <div class="banner" role="note">Synthetic demo only. Harborlight Supplies is a fictional tenant. No real customer, Arvanta, or Cheermol data is used. The ledger lives in this tab until you reset or reload.</div>
   <header class="site-header">
     <a class="wordmark" href="./">LedgerGuard</a>
     <nav class="nav" aria-label="Site">
@@ -22,111 +24,154 @@
       <a href="https://github.com/Val1-IT/Arvanta-Ledgerguard">Source</a>
     </nav>
   </header>
-  <section class="hero">
-    <h1>Deterministic policy for agents that touch the ledger.</h1>
-    <p class="lede">LedgerGuard is verification infrastructure for AI agents doing financial and ERP actions. Agents may investigate and propose a repair. They do not receive mutation authority just because a model emitted a tool call. Policy is ordinary code: <strong>ALLOW</strong>, <strong>DENY</strong>, or <strong>REQUIRE_APPROVAL</strong>. A human approves an exact plan version. Execution is verified against the system of record, then an audit receipt is issued.</p>
-    <div class="pipeline" aria-label="Execution pipeline">
-      <div>Detect <span>Ground the incident in evidence</span></div>
-      <div>Authorize <span>Deterministic policy, not prompts</span></div>
-      <div>Execute <span>Idempotent, constrained mutation</span></div>
-      <div>Verify <span>Postconditions, then a receipt</span></div>
-    </div>
-    <div class="outcomes">
-      <span class="stamp" data-outcome="ALLOW">ALLOW</span>
-      <span class="stamp" data-outcome="REQUIRE_APPROVAL">REQUIRE_APPROVAL</span>
-      <span class="stamp" data-outcome="DENY">DENY</span>
-    </div>
-  </section>
-  <section class="band" id="how">
-    <h2>What this page demonstrates</h2>
-    <div class="cards">
-      <article class="card">
-        <h3>Policy checks</h3>
-        <p>The six rules in <code>@ledgerguard/policy</code> run in this browser: evidence, verification, financial impact, capability, exact-version approval, and idempotency. The most severe outcome wins.</p>
-      </article>
-      <article class="card">
-        <h3>Human approval</h3>
-        <p>REQUIRE_APPROVAL stops execution until a human operator accepts the exact plan version. An AI agent cannot approve. When the assistant requests approval, this browser asks you to confirm first.</p>
-      </article>
-      <article class="card">
-        <h3>Audit receipts</h3>
-        <p>Every evaluation and committed execution writes a hashed receipt you can inspect. Replaying a completed idempotency key is DENY: DUPLICATE_EXECUTION. Nothing is invented; decisions come from the engine.</p>
-      </article>
-    </div>
-  </section>
-  <main class="band console" id="console">
-    <h2>Harborlight Supplies policy console</h2>
-    <p class="meta">Fictional inventory ledger, same Industrial Widget figures as the repository's in-memory demo. Quantity should be 10.000, not 20.000. Financial threshold: 100,000 IDR, so this repair needs a human.</p>
-    <div class="console-grid">
-      <section class="panel" aria-labelledby="ledger-heading">
-        <h3 id="ledger-heading">Ledger snapshot</h3>
-        <p><strong>ITEM-001 Industrial Widget</strong></p>
-        <p>Quantity on hand: <strong id="ledger-qty">—</strong></p>
-        <p>Inventory value: <strong id="ledger-value">—</strong></p>
-        <p>Average cost: <span id="ledger-cost">—</span></p>
-        <table>
-          <thead>
-            <tr><th>Movement</th><th>Qty</th><th>Value</th><th>Receipt</th><th>Status</th></tr>
-          </thead>
-          <tbody id="movement-rows"></tbody>
-        </table>
-        <p class="meta">Incident: <strong id="incident-type">—</strong></p>
-        <p id="incident-summary"></p>
-      </section>
-      <section class="panel" aria-labelledby="plan-heading">
-        <h3 id="plan-heading">Proposed plan</h3>
-        <label for="plan-select">Plan</label>
-        <select id="plan-select"></select>
-        <p><strong id="plan-title">—</strong></p>
-        <p>State: <strong id="plan-state">—</strong> · Version: <strong id="plan-version">—</strong></p>
-        <p>Impact: <strong id="plan-impact">—</strong></p>
-        <p>Approved by: <span id="plan-approved-by">—</span></p>
-        <p class="meta">Idempotency key: <code id="plan-key">—</code></p>
-        <p>Evidence</p>
-        <pre class="pre" id="plan-evidence"></pre>
-        <p>Verification expectations</p>
-        <pre class="pre" id="plan-verify"></pre>
-        <div class="toolbar">
-          <button type="button" id="btn-evaluate">Evaluate policy</button>
-          <button type="button" id="btn-approve" class="primary">Approve plan</button>
-          <button type="button" id="btn-reject" class="danger">Reject plan</button>
-          <button type="button" id="btn-execute">Execute and verify</button>
-          <button type="button" id="btn-reset">Reset demo</button>
-        </div>
-        <p class="meta">Page version <span id="page-version">—</span> · Session <code id="session-id">—</code></p>
-      </section>
-      <section class="panel" aria-labelledby="decision-heading">
-        <h3 id="decision-heading">Policy decision</h3>
-        <div id="decision-outcome">Not yet evaluated</div>
-        <pre class="pre" id="decision-detail"></pre>
-        <p class="meta">Receipt: <code id="decision-receipt">—</code></p>
-      </section>
-      <section class="panel" aria-labelledby="receipts-heading">
-        <h3 id="receipts-heading">Audit receipts</h3>
-        <ul id="receipt-list"><li>No receipts yet.</li></ul>
-      </section>
-    </div>
-  </main>
-  <section class="band" id="limits">
-    <h2>What this site cannot do</h2>
-    <div class="card">
-      <p>It cannot write to a live ERP or production database, collect payment, run a publisher-funded LLM, or expose a public MCP facade. An AI agent cannot approve a plan. Other agentic websites can fetch the published <code>agent-manifest.json</code> and network file once this site is hosted with CORS; this static page does not itself call theirs.</p>
-    </div>
-  </section>
-  <section id="assistant" class="assistant band" aria-labelledby="assistant-heading">
-    <h2 id="assistant-heading">Ask LedgerGuard</h2>
-    <p>The assistant can read this page's ledger, evaluate a plan, request your approval, execute a verified repair, and fetch audit receipts. It uses only the site's own functions and the facts they return.</p>
-    <p class="assistant-note">Your messages and this page's data go to the LLM provider you choose in the settings below. You confirm anything that cannot be undone before it happens. LedgerGuard does not receive or store your key.</p>
-    <p id="assistant-status" role="status">Connecting the assistant… If this message stays, the assistant could not load. You can still use the page directly.</p>
-    <div id="agent-app">
-      <div data-ns-slot="header"></div>
-      <div class="assistant-panels">
-        <div data-ns-slot="chat"></div>
-        <div data-ns-slot="agents"></div>
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <p class="eyebrow">Open Agentic Web demo</p>
+      <h1 id="hero-title">Deterministic policy for agents that touch the ledger.</h1>
+      <p class="lede">LedgerGuard is verification infrastructure for AI agents doing financial and ERP actions. Agents may investigate and propose a repair. They do not receive mutation authority just because a model emitted a tool call. Policy is ordinary code: <strong>ALLOW</strong>, <strong>DENY</strong>, or <strong>REQUIRE_APPROVAL</strong>. A human approves an exact plan version. Execution is verified against the system of record, then an audit receipt is issued.</p>
+      <ol class="pipeline" aria-label="Execution pipeline">
+        <li>Detect <span>Ground the incident in evidence</span></li>
+        <li>Authorize <span>Deterministic policy, not prompts</span></li>
+        <li>Execute <span>Idempotent, constrained mutation</span></li>
+        <li>Verify <span>Postconditions, then a receipt</span></li>
+      </ol>
+      <div class="outcomes" aria-label="Policy outcomes">
+        <span class="stamp" data-outcome="ALLOW">ALLOW</span>
+        <span class="stamp" data-outcome="REQUIRE_APPROVAL">REQUIRE_APPROVAL</span>
+        <span class="stamp" data-outcome="DENY">DENY</span>
       </div>
-      <div data-ns-slot="settings"></div>
-    </div>
-  </section>
+    </section>
+    <section class="band" id="how" aria-labelledby="how-heading">
+      <h2 id="how-heading">What this page demonstrates</h2>
+      <div class="cards">
+        <article class="card">
+          <h3>Policy checks</h3>
+          <p>The six rules in <code>@ledgerguard/policy</code> run in this browser: evidence, verification, financial impact, capability, exact-version approval, and idempotency. The most severe outcome wins.</p>
+        </article>
+        <article class="card">
+          <h3>Human approval</h3>
+          <p>REQUIRE_APPROVAL stops execution until a human operator accepts the exact plan version. An AI agent cannot approve. When the assistant requests approval, this browser asks you to confirm first.</p>
+        </article>
+        <article class="card">
+          <h3>Audit receipts</h3>
+          <p>Every evaluation and committed execution writes a hashed receipt you can inspect. Replaying a completed idempotency key is DENY: DUPLICATE_EXECUTION. Nothing is invented; decisions come from the engine.</p>
+        </article>
+      </div>
+    </section>
+    <section class="band console" id="console" aria-labelledby="console-heading">
+      <h2 id="console-heading">Harborlight Supplies policy console</h2>
+      <p class="meta intro">Fictional inventory ledger, same Industrial Widget figures as the repository's in-memory demo. Quantity should be 10.000, not 20.000. Financial threshold: 100,000 IDR, so this repair needs a human.</p>
+      <p id="console-pending" class="status-banner is-loading">Loading the synthetic Harborlight fixture…</p>
+      <div id="console-error" class="status-banner is-error" role="alert" hidden></div>
+      <ol class="flow-stepper" id="flow-stepper" aria-label="Repair path">
+        <li id="step-evaluate" data-state="current">
+          <span class="step-index" aria-hidden="true">1</span>
+          <span class="step-body">
+            <span class="step-title">Evaluate policy</span>
+            <span class="step-copy" id="step-evaluate-copy">See ALLOW, REQUIRE_APPROVAL, or DENY.</span>
+          </span>
+        </li>
+        <li id="step-approve" data-state="pending">
+          <span class="step-index" aria-hidden="true">2</span>
+          <span class="step-body">
+            <span class="step-title">Approve the plan</span>
+            <span class="step-copy" id="step-approve-copy">REQUIRE_APPROVAL waits for a human to accept this exact plan version.</span>
+          </span>
+        </li>
+        <li id="step-execute" data-state="pending">
+          <span class="step-index" aria-hidden="true">3</span>
+          <span class="step-body">
+            <span class="step-title">Execute and verify</span>
+            <span class="step-copy" id="step-execute-copy">Apply on a copy, check postconditions, then commit.</span>
+          </span>
+        </li>
+        <li id="step-replay" data-state="pending">
+          <span class="step-index" aria-hidden="true">4</span>
+          <span class="step-body">
+            <span class="step-title">Replay the execution key</span>
+            <span class="step-copy" id="step-replay-copy">A second attempt is DENY: DUPLICATE_EXECUTION.</span>
+          </span>
+        </li>
+      </ol>
+      <p id="flow-status" class="flow-status" aria-live="polite">Start by evaluating the selected plan.</p>
+      <div class="console-grid">
+        <section class="panel" aria-labelledby="ledger-heading">
+          <h3 id="ledger-heading">Ledger snapshot</h3>
+          <p class="item-name"><strong>ITEM-001 Industrial Widget</strong></p>
+          <dl class="metrics">
+            <div><dt>Quantity on hand</dt><dd id="ledger-qty">—</dd></div>
+            <div><dt>Inventory value</dt><dd id="ledger-value">—</dd></div>
+            <div><dt>Average cost</dt><dd id="ledger-cost">—</dd></div>
+          </dl>
+          <div class="table-scroll">
+            <table>
+              <caption class="visually-hidden">Inventory movements for ITEM-001</caption>
+              <thead>
+                <tr><th>Movement</th><th>Qty</th><th>Value</th><th>Receipt</th><th>Status</th></tr>
+              </thead>
+              <tbody id="movement-rows"></tbody>
+            </table>
+          </div>
+          <p class="meta incident-label">Incident: <strong id="incident-type">—</strong></p>
+          <p id="incident-summary"></p>
+        </section>
+        <section class="panel" aria-labelledby="plan-heading">
+          <h3 id="plan-heading">Proposed plan</h3>
+          <div class="field">
+            <label for="plan-select">Plan</label>
+            <select id="plan-select"></select>
+          </div>
+          <p class="item-name"><strong id="plan-title">—</strong></p>
+          <p>State: <strong id="plan-state">—</strong> · Version: <strong id="plan-version">—</strong></p>
+          <p>Impact: <strong id="plan-impact">—</strong></p>
+          <p>Approved by: <span id="plan-approved-by">—</span></p>
+          <p class="meta">Idempotency key: <code id="plan-key">—</code></p>
+          <h4 class="subhead">Evidence</h4>
+          <pre class="pre" id="plan-evidence"></pre>
+          <h4 class="subhead">Verification expectations</h4>
+          <pre class="pre" id="plan-verify"></pre>
+          <div class="toolbar" role="group" aria-label="Plan actions">
+            <button type="button" id="btn-evaluate">Evaluate policy</button>
+            <button type="button" id="btn-approve" class="primary">Approve plan</button>
+            <button type="button" id="btn-reject" class="danger">Reject plan</button>
+            <button type="button" id="btn-execute">Execute and verify</button>
+            <button type="button" id="btn-reset">Reset demo</button>
+          </div>
+          <p class="meta">Page version <span id="page-version">—</span> · Session <code id="session-id">—</code></p>
+        </section>
+        <section class="panel" aria-labelledby="decision-heading">
+          <h3 id="decision-heading">Policy decision</h3>
+          <div id="decision-outcome">Not yet evaluated</div>
+          <pre class="pre" id="decision-detail"></pre>
+          <p class="meta">Receipt: <code id="decision-receipt">—</code></p>
+        </section>
+        <section class="panel" aria-labelledby="receipts-heading">
+          <h3 id="receipts-heading">Audit receipts</h3>
+          <ul id="receipt-list"><li class="empty-state">No receipts yet. Evaluate a plan to record the first policy receipt.</li></ul>
+        </section>
+      </div>
+    </section>
+    <section class="band" id="limits" aria-labelledby="limits-heading">
+      <h2 id="limits-heading">What this site cannot do</h2>
+      <div class="card">
+        <p>It cannot write to a live ERP or production database, collect payment, run a publisher-funded LLM, or expose a public MCP facade. An AI agent cannot approve a plan. Other agentic websites can fetch the published <code>agent-manifest.json</code> and network file once this site is hosted with CORS; this static page does not itself call theirs.</p>
+      </div>
+    </section>
+    <section id="assistant" class="assistant band" aria-labelledby="assistant-heading">
+      <h2 id="assistant-heading">Ask LedgerGuard</h2>
+      <p>The assistant can read this page's ledger, evaluate a plan, request your approval, execute a verified repair, and fetch audit receipts. It uses only the site's own functions and the facts they return.</p>
+      <p class="assistant-note">Your messages and this page's data go to the LLM provider you choose in the settings below. You confirm anything that cannot be undone before it happens. LedgerGuard does not receive or store your key.</p>
+      <p id="assistant-status" role="status">Connecting the assistant… If this message stays, the assistant could not load. You can still use the page directly.</p>
+      <div id="agent-app">
+        <div data-ns-slot="header"></div>
+        <div class="assistant-panels">
+          <div data-ns-slot="chat"></div>
+          <div data-ns-slot="agents"></div>
+        </div>
+        <div data-ns-slot="settings"></div>
+      </div>
+    </section>
+  </main>
   <footer class="site-footer">
     <p>LedgerGuard is Apache-2.0 open source. This page is an Open Agentic Web surface added after 11 November 2026: a public, browser-executed agent network grounded in the same deterministic policy engine as <code>@ledgerguard/policy</code>.</p>
     <p>Public agent files (CORS should be enabled when hosted):</p>

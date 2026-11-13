@@ -737,6 +737,7 @@ class LedgerPage {
   resetDemo() {
     this.state = initialFixture();
     this.selectedPlanId = this.state.selectedPlanId;
+    this.clearError();
     this.render();
     return this.getState();
   }
@@ -792,6 +793,10 @@ class LedgerPage {
     }
     const state = this.getState();
     const plan = state.plans[this.selectedPlanId];
+    const pending = document.getElementById("console-pending");
+    if (pending) {
+      pending.hidden = true;
+    }
     setText("ledger-qty", state.ledger.quantityOnHand);
     setText("ledger-value", formatMoney(state.ledger.inventoryValue, state.company.currency));
     setText("ledger-cost", formatMoney(state.ledger.averageCost, state.company.currency));
@@ -800,6 +805,15 @@ class LedgerPage {
     const movementTable = document.getElementById("movement-rows");
     if (movementTable && typeof movementTable.replaceChildren === "function") {
       movementTable.replaceChildren();
+      if (state.ledger.movements.length === 0) {
+        const row = document.createElement("tr");
+        const empty = document.createElement("td");
+        empty.colSpan = 5;
+        empty.className = "empty-state";
+        empty.textContent = "No movements in this fixture.";
+        row.append(empty);
+        movementTable.append(row);
+      }
       for (const movement of state.ledger.movements) {
         const row = document.createElement("tr");
         row.append(
@@ -829,8 +843,8 @@ class LedgerPage {
       setText("plan-title", plan.title);
       setText("plan-impact", formatMoney(plan.impactAmount, state.company.currency));
       setText("plan-key", plan.idempotencyKey);
-      setText("plan-evidence", plan.evidence.length ? plan.evidence.map((item) => `• ${item}`).join("\n") : "None");
-      setText("plan-verify", plan.verifications.length ? plan.verifications.map((item) => `• ${item.field} = ${item.expected}`).join("\n") : "None");
+      setText("plan-evidence", plan.evidence.length ? plan.evidence.map((item) => `• ${item}`).join("\n") : "None attached to this plan.");
+      setText("plan-verify", plan.verifications.length ? plan.verifications.map((item) => `• ${item.field} = ${item.expected}`).join("\n") : "None attached to this plan.");
       setText("plan-approved-by", plan.approvedBy ?? "—");
     }
     const decision = state.lastDecision;
@@ -853,7 +867,8 @@ class LedgerPage {
       receiptList.replaceChildren();
       if (state.receipts.length === 0) {
         const empty = document.createElement("li");
-        empty.textContent = "No receipts yet.";
+        empty.className = "empty-state";
+        empty.textContent = "No receipts yet. Evaluate a plan to record the first policy receipt.";
         receiptList.append(empty);
       }
       for (const receipt of state.receipts) {
@@ -870,6 +885,118 @@ class LedgerPage {
     }
     setText("page-version", String(state.version));
     setText("session-id", state.sessionId);
+    this.renderFlow(state, plan);
+  }
+
+  /**
+   * Update the repair-path stepper and the polite status line from current state.
+   *
+   * :param state: The page state from getState().
+   * :param plan: The selected plan, if any.
+   */
+  renderFlow(state, plan) {
+    const forThisPlan = state.lastDecision && plan && state.lastDecision.planId === plan.id
+      ? state.lastDecision
+      : null;
+    const outcome = forThisPlan ? forThisPlan.decision.outcome : null;
+    const reasons = forThisPlan ? forThisPlan.decision.reasons.map((reason) => reason.code) : [];
+    const isDuplicate = reasons.includes("DUPLICATE_EXECUTION");
+    const evaluateState = outcome ? "done" : "current";
+    let approveState = "pending";
+    let approveCopy = "REQUIRE_APPROVAL waits for a human to accept this exact plan version.";
+    let executeState = "pending";
+    let executeCopy = "Apply on a copy, check postconditions, then commit.";
+    let replayState = "pending";
+    let replayCopy = "A second attempt is DENY: DUPLICATE_EXECUTION.";
+    let status = "Start by evaluating the selected plan.";
+    let nextButton = "btn-evaluate";
+
+    if (plan && plan.state === "REJECTED") {
+      approveState = "blocked";
+      approveCopy = "This plan was rejected.";
+      executeState = "blocked";
+      executeCopy = "A rejected plan cannot be executed.";
+      status = "The plan was rejected. Reset the demo to start again, or choose another plan.";
+      nextButton = "btn-reset";
+    } else if (plan && plan.state === "EXECUTED") {
+      approveState = "done";
+      approveCopy = plan.approvedBy ? `Approved by ${plan.approvedBy}.` : "Approved.";
+      executeState = "done";
+      executeCopy = "Committed after verification PASS.";
+      if (isDuplicate) {
+        replayState = "done";
+        replayCopy = "Replay denied: DUPLICATE_EXECUTION. The ledger was not changed again.";
+        status = "Replay denied: DUPLICATE_EXECUTION. The ledger was not changed again.";
+        nextButton = "btn-reset";
+      } else {
+        replayState = "current";
+        status = "Execution committed and verified. Replaying the same key should be DENY: DUPLICATE_EXECUTION.";
+        nextButton = "btn-execute";
+      }
+    } else if (plan && plan.state === "APPROVED") {
+      approveState = "done";
+      approveCopy = plan.approvedBy ? `Approved by ${plan.approvedBy}.` : "Approved.";
+      executeState = "current";
+      status = "Plan approved. Execute and verify to commit the repair.";
+      nextButton = "btn-execute";
+    } else if (outcome === "REQUIRE_APPROVAL") {
+      approveState = "current";
+      status = "Policy outcome is REQUIRE_APPROVAL. Approve the exact plan version, then execute.";
+      nextButton = "btn-approve";
+    } else if (outcome === "DENY") {
+      approveState = "blocked";
+      approveCopy = "Policy denied this plan. Approval will not make execution allowed until the refusal is fixed.";
+      executeState = "blocked";
+      status = "Policy outcome is DENY. Read the reasons, choose another plan, or reset the demo.";
+      nextButton = "btn-evaluate";
+    } else if (outcome === "ALLOW") {
+      approveState = plan && plan.state === "APPROVED" ? "done" : "pending";
+      executeState = "current";
+      status = "Policy outcome is ALLOW. Execute and verify to commit the repair.";
+      nextButton = "btn-execute";
+    }
+
+    const evaluateCopy = !outcome
+      ? "See ALLOW, REQUIRE_APPROVAL, or DENY."
+      : (plan && plan.state === "EXECUTED"
+        ? "Evaluation completed for this plan."
+        : `Policy outcome is ${outcome}.`);
+    setStep("step-evaluate", evaluateState, evaluateCopy);
+    setStep("step-approve", approveState, approveCopy);
+    setStep("step-execute", executeState, executeCopy);
+    setStep("step-replay", replayState, replayCopy);
+    setLiveText("flow-status", status);
+    setNextButton(nextButton);
+    const executeBtn = document.getElementById("btn-execute");
+    if (executeBtn && !executeBtn.disabled) {
+      executeBtn.textContent = plan && plan.state === "EXECUTED" ? "Replay execution key" : "Execute and verify";
+    }
+  }
+
+  /**
+   * Show an inline error in the console alert region. Replaces window.alert.
+   *
+   * :param message: The refusal or failure reason.
+   */
+  showError(message) {
+    const node = document.getElementById("console-error");
+    if (!node) {
+      return;
+    }
+    node.hidden = false;
+    node.textContent = message;
+  }
+
+  /**
+   * Hide the console error region.
+   */
+  clearError() {
+    const node = document.getElementById("console-error");
+    if (!node) {
+      return;
+    }
+    node.hidden = true;
+    node.textContent = "";
   }
 
   /**
@@ -881,12 +1008,23 @@ class LedgerPage {
     }
     const select = document.getElementById("plan-select");
     select?.addEventListener("change", () => {
+      this.clearError();
       this.selectPlan(select.value);
     });
     document.getElementById("btn-evaluate")?.addEventListener("click", () => {
-      void this.evaluatePlan({ planId: this.selectedPlanId, expectedVersion: this.state.plans[this.selectedPlanId].version });
+      this.clearError();
+      const button = document.getElementById("btn-evaluate");
+      setBusy(button, true, "Evaluating…");
+      void this.evaluatePlan({ planId: this.selectedPlanId, expectedVersion: this.state.plans[this.selectedPlanId].version })
+        .then((result) => {
+          if (!result.ok) {
+            this.showError(result.reason);
+          }
+        })
+        .finally(() => setBusy(button, false));
     });
     document.getElementById("btn-approve")?.addEventListener("click", () => {
+      this.clearError();
       const result = this.approvePlan({
         planId: this.selectedPlanId,
         expectedVersion: this.state.version,
@@ -894,10 +1032,11 @@ class LedgerPage {
         approverName: "demo-operator",
       });
       if (!result.ok) {
-        window.alert(result.reason);
+        this.showError(result.reason);
       }
     });
     document.getElementById("btn-reject")?.addEventListener("click", () => {
+      this.clearError();
       const result = this.rejectPlan({
         planId: this.selectedPlanId,
         expectedVersion: this.state.version,
@@ -905,21 +1044,28 @@ class LedgerPage {
         operatorName: "demo-operator",
       });
       if (!result.ok) {
-        window.alert(result.reason);
+        this.showError(result.reason);
       }
     });
     document.getElementById("btn-execute")?.addEventListener("click", () => {
+      this.clearError();
+      const button = document.getElementById("btn-execute");
+      setBusy(button, true, "Working…");
       void this.executePlan({
         planId: this.selectedPlanId,
         expectedVersion: this.state.version,
         expectedPlanVersion: this.state.plans[this.selectedPlanId].version,
       }).then((result) => {
-        if (!result.ok && typeof window !== "undefined") {
-          window.alert(result.reason);
+        if (!result.ok) {
+          this.showError(result.reason);
         }
+      }).finally(() => {
+        setBusy(button, false);
+        this.render();
       });
     });
     document.getElementById("btn-reset")?.addEventListener("click", () => {
+      this.clearError();
       this.resetDemo();
     });
     this.render();
@@ -972,6 +1118,75 @@ function verifyExpectations(working, plan) {
     overallStatus: results.every((item) => item.status === "PASS") ? "PASS" : "FAIL",
     results,
   };
+}
+
+
+function setStep(id, state, copy) {
+  const node = document.getElementById(id);
+  const names = {
+    "step-evaluate": "Evaluate policy",
+    "step-approve": "Approve the plan",
+    "step-execute": "Execute and verify",
+    "step-replay": "Replay the execution key",
+  };
+  const label = { pending: "Not started", current: "Current step", done: "Complete", blocked: "Blocked" }[state] || state;
+  if (node && typeof node.setAttribute === "function") {
+    node.setAttribute("data-state", state);
+    node.setAttribute("aria-current", state === "current" ? "step" : "false");
+    node.setAttribute("aria-label", `${names[id] || id}: ${label}`);
+  }
+  if (copy) {
+    setText(`${id}-copy`, copy);
+  }
+}
+
+function setLiveText(id, value) {
+  const node = document.getElementById(id);
+  if (node && node.textContent !== value) {
+    node.textContent = value;
+  }
+}
+
+function setNextButton(id) {
+  for (const key of ["btn-evaluate", "btn-approve", "btn-execute", "btn-reset"]) {
+    const button = document.getElementById(key);
+    if (!button) {
+      continue;
+    }
+    const on = key === id;
+    if (button.classList && typeof button.classList.toggle === "function") {
+      button.classList.toggle("is-next", on);
+    }
+  }
+}
+
+function setBusy(button, busy, label) {
+  if (!button) {
+    return;
+  }
+  if (busy) {
+    if (!button.dataset) {
+      button.dataset = {};
+    }
+    if (!button.dataset.restLabel) {
+      button.dataset.restLabel = button.textContent;
+    }
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    if (label) {
+      button.textContent = label;
+    }
+    return;
+  }
+  button.disabled = false;
+  button.removeAttribute?.("aria-busy");
+  const rest = label || button.dataset?.restLabel;
+  if (rest) {
+    button.textContent = rest;
+  }
+  if (button.dataset) {
+    delete button.dataset.restLabel;
+  }
 }
 
 function setText(id, value) {
